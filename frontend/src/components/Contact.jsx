@@ -59,7 +59,7 @@ export const Contact = () => {
                     {"Par Téléphone (24/7)"}
                   </p>
                   <p className="text-lg font-bold text-white font-headings">
-                    {"06 12 34 56 78"}
+                    {"06 71 42 24 92"}
                   </p>
                 </div>
               </a>
@@ -89,7 +89,7 @@ export const Contact = () => {
 
               {/* Email Connection */}
               <a
-                href="mailto:m.laurent.interprete@gmail.com"
+                href="mailto:kenzaalim@gmail.com"
                 data-testid={INTERPRETER.emailContactLink}
                 className="bg-slate-900/50 hover:bg-slate-900 border border-slate-800 p-6 flex flex-col items-center justify-center text-center space-y-3 transition-colors duration-200 group"
               >
@@ -101,7 +101,7 @@ export const Contact = () => {
                     {"Par Courriel"}
                   </p>
                   <p className="text-sm font-bold text-white font-headings break-all">
-                    {"m.laurent.interprete@gmail.com"}
+                    {"kenzaalim@gmail.com"}
                   </p>
                 </div>
               </a>

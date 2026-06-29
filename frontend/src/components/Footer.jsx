@@ -11,7 +11,7 @@ export const Footer = () => {
           {/* Identity */}
           <div className="space-y-2 text-center md:text-left">
             <span className="font-headings font-bold text-lg text-white tracking-wide">
-              {"Marc LAURENT"}
+              {"Kenza ALIM"}
             </span>
             <p className="text-xs text-slate-400">
               {"Interprète-Traducteur Judiciaire Assermenté près la Cour d’appel."}
@@ -26,7 +26,7 @@ export const Footer = () => {
               {"LIGNE D'URGENCE 24/7"}
             </span>
             <p className="text-lg font-bold text-white font-headings">
-              {"06 12 34 56 78"}
+              {"06 71 42 24 92"}
             </p>
           </div>
         </div>
@@ -34,29 +34,17 @@ export const Footer = () => {
         {/* Legal notice and details */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
           <div className="text-center sm:text-left space-y-1">
-            <p>© {currentYear} {"Cabinet Laurent. Tous droits réservés."}</p>
+            <p>© {currentYear} {"Alim. Tous droits réservés."}</p>
             <p className="text-slate-500">
               {"SIRET : En cours d'obtention (Collaborateur occasionnel du service public — COSP)."}
             </p>
           </div>
           
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-slate-500">
-            <a 
-              href="https://emergent.sh" 
-              data-testid={HOME.emergentLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-white transition-colors duration-200 font-semibold"
-            >
-              {"Emergent Platform"}
-            </a>
-            <a href="#mentions-legales" className="hover:text-white transition-colors duration-200">
+            <a href="/mentions-legales" className="hover:text-white transition-colors duration-200">
               {"Mentions Légales"}
             </a>
-            <a href="#deontologie" className="hover:text-white transition-colors duration-200">
-              {"Charte Déontologique"}
-            </a>
-            <a href="#politique-confidentialite" className="hover:text-white transition-colors duration-200">
+            <a href="/politique-confidentialite" className="hover:text-white transition-colors duration-200">
               {"Politique de Confidentialité"}
             </a>
           </div>

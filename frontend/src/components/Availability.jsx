@@ -76,7 +76,7 @@ export const Availability = () => {
             data-testid="availability-phone-cta"
             className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-base transition-colors duration-200 shadow whitespace-nowrap"
           >
-            {"Appeler le 06 12 34 56 78"}
+            {"Appeler le 06 71 42 24 92"}
           </a>
         </div>
       </div>

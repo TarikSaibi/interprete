@@ -69,7 +69,7 @@ export const Hero = () => {
               className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-lg transition-all duration-200 shadow-lg hover:scale-[1.01]"
             >
               <Phone className="h-5 w-5 animate-bounce" />
-              <span>{"Appel d'Urgence : 06 12 34 56 78"}</span>
+              <span>{"Appel d'Urgence : 06 71 42 24 92"}</span>
             </a>
             
             <a

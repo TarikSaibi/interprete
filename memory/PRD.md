@@ -8,7 +8,7 @@ Création d'un site vitrine professionnel d'une seule page (one-page) avec défi
 - **Besoin Clé** : Contacter en extrême urgence (parfois de nuit ou le week-end) un interprète assermenté et réactif pour assister aux auditions ou notifier des droits de garde à vue.
 
 ## 3. Spécifications Fonctionnelles & Exigences Clés (Statiques)
-- **Identité Professionnelle** : Nom fictif "Marc LAURENT", "Interprète-Traducteur Judiciaire Assermenté".
+- **Identité Professionnelle** : Nom fictif "Kenza ALIM", "Interprète-Traducteur Judiciaire Assermenté".
 - **Disponibilité & Réactivité** : En astreinte d'urgence 24h/24 & 7j/7, avec engagement d'arrivée rapide (30-45 minutes).
 - **Services Clairs** : Gardes à Vue (GAV), Auditions libres, Comparutions immédiates, Interprétariat administratif & pénitentiaire.
 - **Langues d'Expertise** : Anglais, Arabe (Standard & Dialectal), Amazigh / Berbère / Kabyle (langue rare et recherchée).

@@ -1,7 +1,6 @@
-import React, { useEffect } from "react";
+import React from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import axios from "axios";
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { Availability } from "@/components/Availability";
@@ -12,23 +11,10 @@ import { InterventionZone } from "@/components/InterventionZone";
 import { Contact } from "@/components/Contact";
 import { Footer } from "@/components/Footer";
 import { EmergencyFab } from "@/components/EmergencyFab";
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { LegalNotice } from "@/components/LegalNotice";
+import { PrivacyPolicy } from "@/components/PrivacyPolicy";
 
 const Home = () => {
-  useEffect(() => {
-    const pingBackend = async () => {
-      try {
-        const response = await axios.get(`${API}/`);
-        console.log("Backend status:", response.data.message);
-      } catch (e) {
-        console.warn("Backend connection skipped or offline (static mode):", e.message);
-      }
-    };
-    pingBackend();
-  }, []);
-
   return (
     <div className="min-h-screen bg-white text-slate-950 flex flex-col font-sans">
       <Header />
@@ -53,6 +39,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/mentions-legales" element={<LegalNotice />} />
+          <Route path="/politique-confidentialite" element={<PrivacyPolicy />} />
         </Routes>
       </BrowserRouter>
     </div>

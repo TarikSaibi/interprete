@@ -28,7 +28,7 @@ export const Header = () => {
                 className="font-headings font-bold text-lg sm:text-xl text-[#0A192F]" 
                 data-testid={INTERPRETER.professionalName}
               >
-                Marc LAURENT
+                Kenza ALIM
               </div>
               <div 
                 className="text-xs text-slate-500 font-medium tracking-wide hidden sm:block"
@@ -61,7 +61,7 @@ export const Header = () => {
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A192F] hover:bg-[#1E3A8A] text-white font-semibold text-sm transition-all duration-200 rounded-sm shadow-sm hover:shadow"
             >
               <Phone className="h-4 w-4" />
-              <span>06 12 34 56 78</span>
+              <span>06 71 42 24 92</span>
             </a>
           </div>
 
@@ -108,7 +108,7 @@ export const Header = () => {
                 className="flex items-center justify-center gap-2 w-full py-3 bg-[#0A192F] text-white font-bold rounded-sm shadow-md"
               >
                 <Phone className="h-5 w-5" />
-                <span>Appeler : 06 12 34 56 78</span>
+                <span>Appeler : 06 71 42 24 92</span>
               </a>
             </div>
           </div>

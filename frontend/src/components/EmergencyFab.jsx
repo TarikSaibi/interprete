@@ -32,7 +32,7 @@ export const EmergencyFab = () => {
         className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3.5 px-4 rounded-lg shadow-2xl flex items-center justify-center gap-2 font-bold text-base transition-colors duration-200"
       >
         <Phone className="h-5 w-5 animate-bounce" />
-        <span>Urgence : 06 12 34 56 78</span>
+        <span>Urgence : 06 71 42 24 92</span>
       </a>
 
       {/* WhatsApp Quick FAB */}
