@@ -13,6 +13,7 @@ import { Footer } from "@/components/Footer";
 import { EmergencyFab } from "@/components/EmergencyFab";
 import { LegalNotice } from "@/components/LegalNotice";
 import { PrivacyPolicy } from "@/components/PrivacyPolicy";
+import { CACalculator } from "@/components/CACalculator";
 
 const Home = () => {
   return (
@@ -41,6 +42,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/mentions-legales" element={<LegalNotice />} />
           <Route path="/politique-confidentialite" element={<PrivacyPolicy />} />
+          <Route path="/calculateur-ca" element={<CACalculator />} />
         </Routes>
       </BrowserRouter>
     </div>
