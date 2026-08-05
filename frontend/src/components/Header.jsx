@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, Menu, X, Scale, Calculator } from 'lucide-react';
+import { Phone, Menu, X, Scale } from 'lucide-react';
 import { INTERPRETER } from '@/constants/testIds';
 
 export const Header = () => {
@@ -13,8 +13,6 @@ export const Header = () => {
     { name: 'Zones', href: '#zones', id: INTERPRETER.navZone },
     { name: 'Contact', href: '#contact', id: INTERPRETER.navContact },
   ];
-
-  const calculatorLink = { name: 'Calculateur CA', href: '/calculateur-ca', id: INTERPRETER.navCalculator };
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/90 border-b border-slate-200 transition-all duration-300">
@@ -53,14 +51,6 @@ export const Header = () => {
                 {link.name}
               </a>
             ))}
-            <a
-              href={calculatorLink.href}
-              data-testid={calculatorLink.id}
-              className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-[#1E3A8A] transition-colors duration-200"
-            >
-              <Calculator className="h-4 w-4" />
-              {calculatorLink.name}
-            </a>
           </nav>
 
           {/* Phone Call CTA */}
@@ -111,15 +101,6 @@ export const Header = () => {
                 {link.name}
               </a>
             ))}
-            <a
-              href={calculatorLink.href}
-              data-testid={`${calculatorLink.id}-mobile`}
-              onClick={() => setIsOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-[#1E3A8A] hover:bg-slate-50 transition-colors duration-200"
-            >
-              <Calculator className="h-4 w-4" />
-              {calculatorLink.name}
-            </a>
             <div className="pt-4 pb-2 border-t border-slate-100">
               <a
                 href="tel:+33612345678"

@@ -17,7 +17,6 @@ export const INTERPRETER = {
   navStatus: 'interpreter-nav-status',
   navZone: 'interpreter-nav-zone',
   navContact: 'interpreter-nav-contact',
-  navCalculator: 'interpreter-nav-calculator',
 
   // Critical content indicators (for verification)
   professionalName: 'interpreter-professional-name',
