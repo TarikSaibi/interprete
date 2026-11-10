@@ -62,3 +62,34 @@ export async function deleteMission(id) {
   const { error } = await supabase.from('missions').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ---- Admin ----
+export async function fetchIsAdmin() {
+  const { data, error } = await supabase.rpc('is_admin');
+  if (error) return false;
+  return data === true;
+}
+
+export async function adminListMissionsForMonth(month) {
+  const { from, to } = monthBounds(month);
+  const { data, error } = await supabase.rpc('admin_list_missions', { p_from: from, p_to: to });
+  if (error) throw error;
+  return data;
+}
+
+// Invitation d'un utilisateur (Edge Function "invite-user", vérifie le rôle admin côté serveur)
+export async function inviteUser(email) {
+  const { data, error } = await supabase.functions.invoke('invite-user', { body: { email } });
+  if (error) {
+    // Récupère le message renvoyé par la fonction si disponible
+    let message = error.message;
+    try {
+      const body = await error.context?.json();
+      if (body?.error) message = body.error;
+    } catch {
+      /* corps non JSON */
+    }
+    throw new Error(message);
+  }
+  return data;
+}

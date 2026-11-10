@@ -3,14 +3,15 @@ import { Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 const inputClass =
-  'flex h-10 w-full rounded-sm border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1E3A8A]';
+  'flex h-11 sm:h-10 w-full rounded-sm border border-slate-300 bg-white px-3 py-1 text-base sm:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1E3A8A]';
 
-// Connexion uniquement : les comptes sont créés depuis le dashboard Supabase (inscriptions publiques désactivées)
+// Connexion + mot de passe oublié (les comptes sont créés / invités depuis le dashboard Supabase)
 export const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [info, setInfo] = useState('');
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -21,8 +22,18 @@ export const LoginForm = () => {
     setLoading(false);
   };
 
+  const onForgot = async () => {
+    setError('');
+    setInfo('');
+    if (!email) return setError("Saisis d'abord ton email ci-dessus.");
+    // Le lien de l'email ramène sur le site, puis vers /definir-mot-de-passe
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    if (err) return setError(`Envoi impossible : ${err.message}`);
+    setInfo('Si ce compte existe, un email de réinitialisation vient d\'être envoyé.');
+  };
+
   return (
-    <form onSubmit={onSubmit} className="bg-slate-50 border border-slate-200 rounded-sm p-6 space-y-4 max-w-md">
+    <form onSubmit={onSubmit} className="bg-slate-50 border border-slate-200 rounded-sm p-4 sm:p-6 space-y-4 w-full max-w-md">
       <div className="flex items-center gap-2 text-[#0A192F] font-semibold">
         <Lock className="h-4 w-4" /> Connexion pour accéder à l'historique des missions
       </div>
@@ -37,10 +48,16 @@ export const LoginForm = () => {
           onChange={(e) => setPassword(e.target.value)} className={inputClass} />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <button type="submit" disabled={loading}
-        className="px-6 py-2 bg-[#0A192F] hover:bg-[#1E3A8A] disabled:opacity-60 text-white font-semibold rounded-sm transition-colors">
-        {loading ? 'Connexion…' : 'Se connecter'}
-      </button>
+      {info && <p className="text-sm text-emerald-700">{info}</p>}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <button type="submit" disabled={loading}
+          className="w-full sm:w-auto px-6 py-3 bg-[#0A192F] hover:bg-[#1E3A8A] disabled:opacity-60 text-white font-semibold rounded-sm transition-colors">
+          {loading ? 'Connexion…' : 'Se connecter'}
+        </button>
+        <button type="button" onClick={onForgot} className="text-sm text-[#1E3A8A] hover:underline py-2">
+          Mot de passe oublié ?
+        </button>
+      </div>
     </form>
   );
 };

@@ -1,6 +1,6 @@
-import React from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import React, { useEffect } from "react";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { Availability } from "@/components/Availability";
@@ -14,6 +14,22 @@ import { EmergencyFab } from "@/components/EmergencyFab";
 import { LegalNotice } from "@/components/LegalNotice";
 import { PrivacyPolicy } from "@/components/PrivacyPolicy";
 import { CACalculator } from "@/components/CACalculator";
+import { AdminPage } from "@/components/admin/AdminPage";
+import { SetPasswordPage } from "@/components/missions/SetPasswordPage";
+import { authLinkType } from "@/lib/supabase";
+
+const SET_PASSWORD_PATH = "/definir-mot-de-passe";
+
+// Arrivée depuis un email d'invitation / de réinitialisation : envoie vers le choix du mot de passe
+const AuthLinkRedirect = () => {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  useEffect(() => {
+    if (authLinkType && pathname !== SET_PASSWORD_PATH) navigate(SET_PASSWORD_PATH, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
+};
 
 const Home = () => {
   return (
@@ -38,11 +54,14 @@ function App() {
   return (
     <div className="App">
       <BrowserRouter>
+        <AuthLinkRedirect />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/mentions-legales" element={<LegalNotice />} />
           <Route path="/politique-confidentialite" element={<PrivacyPolicy />} />
           <Route path="/calculateur-ca" element={<CACalculator />} />
+          <Route path="/admin" element={<AdminPage />} />
+          <Route path={SET_PASSWORD_PATH} element={<SetPasswordPage />} />
         </Routes>
       </BrowserRouter>
     </div>
