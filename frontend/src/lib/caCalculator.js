@@ -1,5 +1,8 @@
 // Barème officiel des vacations d'interprétariat oral (missions réalisées à compter du 22/09/2023)
 // Source : Ministère de la Justice, "Mémoire de frais de justice des traducteurs interprètes en matière civile"
+// Forfait frais de repas ajouté optionnellement à une mission
+export const MEAL_ALLOWANCE = 20;
+
 export const TARIF_REGIMES = [
   { id: 'weekday-day', label: 'Lundi au vendredi, de 7h à 22h', firstHour: 65.0, nextHours: 46.5 },
   { id: 'weekday-night', label: 'Lundi au vendredi, de 22h à 7h', firstHour: 76.8, nextHours: 58.0 },
@@ -97,7 +100,7 @@ export function computeMissionCA({ date, startTime, endTime }) {
     breakdown.push({
       index: i + 1,
       label: i === 0 ? '1ère heure' : `Heure suivante n°${i + 1}`,
-      clockLabel: segmentStart.toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' }),
+      clockLabel: segmentStart.toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }),
       regimeLabel: regime.label,
       rate,
     });
