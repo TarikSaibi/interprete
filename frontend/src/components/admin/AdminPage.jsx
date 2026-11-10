@@ -292,7 +292,7 @@ const AdminDashboard = () => {
             {users.map((u) => <option key={u.userId} value={u.userId}>{u.email}</option>)}
           </select>
         </div>
-        <div className="md:hidden space-y-3">
+        <div className="md:hidden border border-slate-200 rounded-sm divide-y divide-slate-200 overflow-hidden">
           {!loading && !visible.length && <p className="py-4 text-center text-slate-500">Aucune mission.</p>}
           {!loading && visible.map((m) => (
             <MissionCard key={m.id} mission={m} showUser expanded={expanded === m.id}

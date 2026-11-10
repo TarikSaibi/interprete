@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Calculator, LogOut, Save } from 'lucide-react';
-import { computeMissionCA, MEAL_ALLOWANCE } from '@/lib/caCalculator';
+import { computeMissionCA, MEAL_ALLOWANCE, TARIF_REGIMES } from '@/lib/caCalculator';
 import { isSupabaseConfigured, signOutAndRedirect } from '@/lib/supabase';
 import { createMission, currentMonth } from '@/lib/missionsApi';
 import { useSession } from '@/hooks/useSession';
@@ -181,28 +181,38 @@ export const CACalculator = () => {
               </p>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* Mobile : liste */}
+            <ul className="sm:hidden border border-slate-200 rounded-sm divide-y divide-slate-200">
+              {result.breakdown.map((row) => (
+                <li key={row.index} className="p-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[#0A192F]">
+                      {row.label} <span className="font-normal text-slate-500 capitalize">· {row.clockLabel}</span>
+                    </p>
+                    <p className="text-xs text-slate-500">{row.regimeLabel}</p>
+                  </div>
+                  <p className="text-sm font-semibold text-[#0A192F] whitespace-nowrap">{eur(row.rate)}</p>
+                </li>
+              ))}
+            </ul>
+            {/* Tablette / desktop : tableau */}
+            <div className="hidden sm:block">
               <table className="w-full text-sm border border-slate-200 rounded-sm overflow-hidden">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 sm:px-4 py-2 font-semibold text-[#0A192F]">Tranche</th>
-                    <th className="text-left px-3 sm:px-4 py-2 font-semibold text-[#0A192F]">Heure</th>
-                    <th className="hidden sm:table-cell text-left px-4 py-2 font-semibold text-[#0A192F]">Régime applicable</th>
-                    <th className="text-right px-3 sm:px-4 py-2 font-semibold text-[#0A192F]">Montant</th>
+                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">Tranche</th>
+                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">Heure</th>
+                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">Régime applicable</th>
+                    <th className="text-right px-4 py-2 font-semibold text-[#0A192F]">Montant</th>
                   </tr>
                 </thead>
                 <tbody>
                   {result.breakdown.map((row) => (
                     <tr key={row.index} className="border-t border-slate-200">
-                      <td className="px-3 sm:px-4 py-2">
-                        {row.label}
-                        <span className="sm:hidden block text-xs text-slate-500">{row.regimeLabel}</span>
-                      </td>
-                      <td className="px-3 sm:px-4 py-2 capitalize whitespace-nowrap">{row.clockLabel}</td>
-                      <td className="hidden sm:table-cell px-4 py-2 text-slate-600">{row.regimeLabel}</td>
-                      <td className="px-3 sm:px-4 py-2 text-right font-medium whitespace-nowrap">
-                        {eur(row.rate)}
-                      </td>
+                      <td className="px-4 py-2">{row.label}</td>
+                      <td className="px-4 py-2 capitalize whitespace-nowrap">{row.clockLabel}</td>
+                      <td className="px-4 py-2 text-slate-600">{row.regimeLabel}</td>
+                      <td className="px-4 py-2 text-right font-medium whitespace-nowrap">{eur(row.rate)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -222,36 +232,36 @@ export const CACalculator = () => {
           <h2 className="text-lg font-headings font-bold text-[#0A192F] mb-3">
             Barème officiel de référence
           </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm border border-slate-200 rounded-sm overflow-hidden">
+          {/* Mobile : liste */}
+          <ul className="sm:hidden border border-slate-200 rounded-sm divide-y divide-slate-200">
+            {TARIF_REGIMES.map((r) => (
+              <li key={r.id} className="p-3">
+                <p className="text-sm font-medium text-[#0A192F]">{r.label}</p>
+                <div className="mt-1.5 grid grid-cols-2 gap-2 text-sm">
+                  <p className="text-slate-500">1ère heure <span className="block font-semibold text-[#0A192F]">{eur(r.firstHour)}</span></p>
+                  <p className="text-slate-500 text-right">Heures suivantes <span className="block font-semibold text-[#0A192F]">{eur(r.nextHours)}</span></p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {/* Tablette / desktop : tableau */}
+          <div className="hidden sm:block">
+            <table className="w-full text-sm border border-slate-200 rounded-sm overflow-hidden">
               <thead className="bg-slate-50">
                 <tr>
-                  <th className="text-left px-2 sm:px-4 py-2 font-semibold text-[#0A192F]">Régime</th>
-                  <th className="text-right px-2 sm:px-4 py-2 font-semibold text-[#0A192F]">1ère heure</th>
-                  <th className="text-right px-2 sm:px-4 py-2 font-semibold text-[#0A192F]">Heures suivantes</th>
+                  <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">Régime</th>
+                  <th className="text-right px-4 py-2 font-semibold text-[#0A192F]">1ère heure</th>
+                  <th className="text-right px-4 py-2 font-semibold text-[#0A192F]">Heures suivantes</th>
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-t border-slate-200">
-                  <td className="px-2 sm:px-4 py-2">Lundi au vendredi, 7h à 22h</td>
-                  <td className="px-2 sm:px-4 py-2 text-right">65,00 €</td>
-                  <td className="px-2 sm:px-4 py-2 text-right">46,50 €</td>
-                </tr>
-                <tr className="border-t border-slate-200">
-                  <td className="px-2 sm:px-4 py-2">Lundi au vendredi, 22h à 7h</td>
-                  <td className="px-2 sm:px-4 py-2 text-right">76,80 €</td>
-                  <td className="px-2 sm:px-4 py-2 text-right">58,00 €</td>
-                </tr>
-                <tr className="border-t border-slate-200">
-                  <td className="px-2 sm:px-4 py-2">Samedi, dimanche, jours fériés, 7h à 22h</td>
-                  <td className="px-2 sm:px-4 py-2 text-right">76,80 €</td>
-                  <td className="px-2 sm:px-4 py-2 text-right">58,00 €</td>
-                </tr>
-                <tr className="border-t border-slate-200">
-                  <td className="px-2 sm:px-4 py-2">Samedi, dimanche, jours fériés, 22h à 7h</td>
-                  <td className="px-2 sm:px-4 py-2 text-right">88,50 €</td>
-                  <td className="px-2 sm:px-4 py-2 text-right">69,80 €</td>
-                </tr>
+                {TARIF_REGIMES.map((r) => (
+                  <tr key={r.id} className="border-t border-slate-200">
+                    <td className="px-4 py-2">{r.label}</td>
+                    <td className="px-4 py-2 text-right">{eur(r.firstHour)}</td>
+                    <td className="px-4 py-2 text-right">{eur(r.nextHours)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

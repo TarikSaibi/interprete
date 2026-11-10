@@ -103,7 +103,7 @@ export const MissionHistory = ({ month, onMonthChange, refreshToken }) => {
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {/* Mobile : cartes */}
-      <div className="md:hidden space-y-3">
+      <div className="md:hidden border border-slate-200 rounded-sm divide-y divide-slate-200 overflow-hidden">
         {loading && <p className="py-6 text-center text-slate-500">Chargement…</p>}
         {!loading && !missions.length && <p className="py-6 text-center text-slate-500">Aucune mission ce mois-ci.</p>}
         {!loading && missions.map((m) => (
