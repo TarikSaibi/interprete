@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { KeyRound } from 'lucide-react';
 import { supabase, authLinkType } from '@/lib/supabase';
 import { useSession } from '@/hooks/useSession';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { frError } from '@/lib/errors';
 
 const inputClass =
   'flex h-11 sm:h-10 w-full rounded-sm border border-slate-300 bg-white px-3 py-1 text-base sm:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1E3A8A]';
@@ -15,6 +17,7 @@ export const SetPasswordPage = () => {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  useDocumentTitle('Mot de passe');
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -22,9 +25,14 @@ export const SetPasswordPage = () => {
     if (password.length < 8) return setError('Le mot de passe doit contenir au moins 8 caractères.');
     if (password !== confirm) return setError('Les deux mots de passe ne correspondent pas.');
     setSaving(true);
-    const { error: err } = await supabase.auth.updateUser({ password });
+    let err;
+    try {
+      ({ error: err } = await supabase.auth.updateUser({ password }));
+    } catch (e) {
+      err = e;
+    }
     setSaving(false);
-    if (err) return setError(`Erreur : ${err.message}`);
+    if (err) return setError(frError(err));
     navigate('/calculateur-ca', { replace: true });
   };
 
@@ -32,18 +40,18 @@ export const SetPasswordPage = () => {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-sm p-5 sm:p-8 space-y-5">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#0A192F] text-white rounded-sm"><KeyRound className="h-5 w-5" /></div>
+          <div className="p-2 bg-[#0A192F] text-white rounded-sm" aria-hidden="true"><KeyRound className="h-5 w-5" /></div>
           <h1 className="font-headings font-bold text-lg sm:text-xl text-[#0A192F]">
             {authLinkType === 'recovery' ? 'Nouveau mot de passe' : 'Choisissez votre mot de passe'}
           </h1>
         </div>
 
-        {session === undefined && <p className="text-slate-500">Vérification du lien…</p>}
+        {session === undefined && <p role="status" className="text-slate-500">Vérification du lien…</p>}
 
         {session === null && (
           <div className="space-y-3">
             <p className="text-slate-700">Ce lien est invalide ou a expiré. Demandez une nouvelle invitation ou utilisez « Mot de passe oublié ».</p>
-            <a href="/calculateur-ca" className="text-[#1E3A8A] hover:underline text-sm">Aller à la connexion</a>
+            <Link to="/calculateur-ca" className="inline-flex items-center min-h-[40px] text-[#1E3A8A] hover:underline text-sm">Aller à la connexion</Link>
           </div>
         )}
 
@@ -52,15 +60,16 @@ export const SetPasswordPage = () => {
             <p className="text-sm text-slate-600">Compte : <span className="font-medium">{session.user.email}</span></p>
             <div className="space-y-1.5">
               <label htmlFor="new-password" className="text-sm font-semibold text-[#0A192F]">Mot de passe</label>
-              <input id="new-password" type="password" autoComplete="new-password" required value={password}
+              <input id="new-password" type="password" autoComplete="new-password" required aria-describedby="new-password-hint" value={password}
                 onChange={(e) => setPassword(e.target.value)} className={inputClass} />
+              <p id="new-password-hint" className="text-xs text-slate-500">8 caractères minimum.</p>
             </div>
             <div className="space-y-1.5">
               <label htmlFor="confirm-password" className="text-sm font-semibold text-[#0A192F]">Confirmer le mot de passe</label>
               <input id="confirm-password" type="password" autoComplete="new-password" required value={confirm}
                 onChange={(e) => setConfirm(e.target.value)} className={inputClass} />
             </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
             <button type="submit" disabled={saving}
               className="w-full px-6 py-3 bg-[#0A192F] hover:bg-[#1E3A8A] disabled:opacity-60 text-white font-semibold rounded-sm transition-colors">
               {saving ? 'Enregistrement…' : 'Enregistrer et continuer'}

@@ -1,7 +1,10 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Scale } from 'lucide-react';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 export const LegalNotice = () => {
+  useDocumentTitle('Mentions légales');
   return (
     <div className="min-h-screen bg-white">
       {/* Header simplifié */}
@@ -151,12 +154,12 @@ export const LegalNotice = () => {
 
           {/* Bouton retour */}
           <div className="pt-8">
-            <a 
-              href="/" 
+            <Link
+              to="/"
               className="inline-flex items-center gap-2 px-6 py-3 bg-[#0A192F] hover:bg-[#1E3A8A] text-white font-semibold rounded-sm transition-colors"
             >
               ← Retour à l'accueil
-            </a>
+            </Link>
           </div>
 
         </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Phone, Menu, X, Scale } from 'lucide-react';
 import { INTERPRETER } from '@/constants/testIds';
+import { PHONE_DISPLAY, PHONE_HREF } from '@/constants/contact';
 
 export const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -20,7 +21,7 @@ export const Header = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo and Identity */}
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-[#0A192F] text-white rounded-sm">
+            <div className="p-2 bg-[#0A192F] text-white rounded-sm" aria-hidden="true">
               <Scale className="h-6 w-6" />
             </div>
             <div>
@@ -40,7 +41,7 @@ export const Header = () => {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center gap-6">
+          <nav aria-label="Navigation principale" className="hidden lg:flex items-center gap-6">
             {navLinks.map((link) => (
               <a
                 key={link.name}
@@ -56,28 +57,32 @@ export const Header = () => {
           {/* Phone Call CTA */}
           <div className="hidden sm:flex items-center">
             <a
-              href="tel:+33612345678"
+              href={PHONE_HREF}
               data-testid={INTERPRETER.headerPhoneCta}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0A192F] hover:bg-[#1E3A8A] text-white font-semibold text-sm transition-all duration-200 rounded-sm shadow-sm hover:shadow"
             >
               <Phone className="h-4 w-4" />
-              <span>06 71 42 24 92</span>
+              <span>{PHONE_DISPLAY}</span>
             </a>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex lg:hidden items-center gap-2">
             <a
-              href="tel:+33612345678"
-              className="flex sm:hidden items-center justify-center p-2.5 bg-[#0A192F] text-white rounded-sm"
+              href={PHONE_HREF}
+              className="flex sm:hidden items-center justify-center h-11 w-11 bg-[#0A192F] text-white rounded-sm"
+              aria-label={`Appeler le ${PHONE_DISPLAY}`}
               data-testid={`${INTERPRETER.headerPhoneCta}-mobile`}
             >
               <Phone className="h-5 w-5" />
             </a>
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="p-2 text-slate-600 hover:text-[#0A192F] focus:outline-none"
-              aria-label="Toggle Menu"
+              type="button"
+              className="h-11 w-11 inline-flex items-center justify-center text-slate-600 hover:text-[#0A192F]"
+              aria-label={isOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+              aria-expanded={isOpen}
+              aria-controls="mobile-menu"
               data-testid="mobile-menu-toggle"
             >
               {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -88,7 +93,7 @@ export const Header = () => {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="lg:hidden border-t border-slate-200 bg-white">
+        <nav id="mobile-menu" aria-label="Navigation principale" className="lg:hidden border-t border-slate-200 bg-white">
           <div className="px-4 py-3 space-y-1">
             {navLinks.map((link) => (
               <a
@@ -96,23 +101,23 @@ export const Header = () => {
                 href={link.href}
                 data-testid={`${link.id}-mobile`}
                 onClick={() => setIsOpen(false)}
-                className="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-[#1E3A8A] hover:bg-slate-50 transition-colors duration-200"
+                className="block px-3 py-2.5 rounded-md text-base font-medium text-slate-700 hover:text-[#1E3A8A] hover:bg-slate-50 transition-colors duration-200"
               >
                 {link.name}
               </a>
             ))}
             <div className="pt-4 pb-2 border-t border-slate-100">
               <a
-                href="tel:+33612345678"
+                href={PHONE_HREF}
                 data-testid={`${INTERPRETER.headerPhoneCta}-mobile-list`}
                 className="flex items-center justify-center gap-2 w-full py-3 bg-[#0A192F] text-white font-bold rounded-sm shadow-md"
               >
                 <Phone className="h-5 w-5" />
-                <span>Appeler : 06 71 42 24 92</span>
+                <span>Appeler : {PHONE_DISPLAY}</span>
               </a>
             </div>
           </div>
-        </div>
+        </nav>
       )}
     </header>
   );

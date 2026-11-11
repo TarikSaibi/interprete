@@ -1,5 +1,6 @@
-// Barème officiel des vacations d'interprétariat oral (missions réalisées à compter du 22/09/2023)
-// Source : Ministère de la Justice, "Mémoire de frais de justice des traducteurs interprètes en matière civile"
+// Barème officiel de l'interprétariat oral (missions réalisées à compter du 22/09/2023)
+// Source : Ministère de la Justice, "Mémoire de frais de justice des traducteurs interprètes en matière civile",
+// tarifs des interprètes ayant exercé leur droit d'option (non COSP), maj. 10/10/2023 (art. R.122 et A.43-7 CPP).
 // Forfait frais de repas ajouté optionnellement à une mission
 export const MEAL_ALLOWANCE = 20;
 
@@ -9,6 +10,41 @@ export const TARIF_REGIMES = [
   { id: 'weekend-day', label: 'Samedi, dimanche ou jour férié, de 7h à 22h', firstHour: 76.8, nextHours: 58.0 },
   { id: 'weekend-night', label: 'Samedi, dimanche ou jour férié, de 22h à 7h', firstHour: 88.5, nextHours: 69.8 },
 ];
+
+// ---- Traduction écrite (facturée à la page) ----
+// Tarif officiel : 38,50 € par page de texte en français de 250 mots (police 12 Times New Roman),
+// sans majoration nuit / week-end / urgence prévue par le barème.
+// Source : Ministère de la Justice (DSJ – SDFIP – FIP4), mémoires de frais de justice des traducteurs interprètes
+// en matière civile et pénale, missions à compter du 22/09/2023, maj. 10/10/2023 ; art. R.122 et A.43-7 CPP.
+//   - avec droit d'option exercé (non COSP) : 38,50 €  <- cohérent avec TARIF_REGIMES ci-dessus
+//   - sans droit d'option (COSP)            : 25,00 €
+// https://www.justice.gouv.fr/sites/default/files/2025-03/TI_civil_do_22092023.pdf
+// https://www.justice.gouv.fr/sites/default/files/2025-03/TI_penal_sdo_22092023.pdf
+export const PAGE_TRANSLATION_RATE = 38.5;
+export const PAGE_WORDS = 250;
+// Plafond de saisie (garde-fou, repris dans la contrainte SQL de la migration 004)
+export const MAX_PAGES = 1000;
+
+// pages : nombre entier de pages (> 0). Montant figé à la saisie comme pour le mode horaire.
+export function computePagesCA({ pages }) {
+  const n = Number(pages);
+  if (!Number.isInteger(n) || n <= 0 || n > MAX_PAGES) return null;
+  const total = Math.round(n * PAGE_TRANSLATION_RATE * 100) / 100;
+  const unit = PAGE_TRANSLATION_RATE.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return {
+    pagesCount: n,
+    total,
+    breakdown: [
+      {
+        index: 1,
+        label: 'Traduction écrite',
+        clockLabel: `${n} page${n > 1 ? 's' : ''} × ${unit}\u00a0€`,
+        regimeLabel: `Page de ${PAGE_WORDS} mots (texte en français)`,
+        rate: total,
+      },
+    ],
+  };
+}
 
 // Calcule le dimanche de Pâques (algorithme de Meeus/Jones/Butcher)
 function getEasterSunday(year) {
@@ -81,9 +117,11 @@ export function computeMissionCA({ date, startTime, endTime }) {
 
   const end = new Date(start);
   end.setHours(eh, em, 0, 0);
-  if (end <= start) {
+  if (end.getTime() === start.getTime()) return null; // durée nulle : saisie invalide
+  if (end < start) {
     end.setDate(end.getDate() + 1); // mission à cheval sur minuit
   }
+  const endsNextDay = end.getDate() !== start.getDate();
 
   const durationMinutes = (end.getTime() - start.getTime()) / 60000;
   const hoursCount = Math.max(1, Math.ceil(durationMinutes / 60));
@@ -110,6 +148,7 @@ export function computeMissionCA({ date, startTime, endTime }) {
     start,
     end,
     durationMinutes,
+    endsNextDay,
     hoursCount,
     breakdown,
     total: Math.round(total * 100) / 100,

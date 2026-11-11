@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock, ShieldAlert, Phone, MapPin } from 'lucide-react';
 import { INTERPRETER } from '@/constants/testIds';
+import { PHONE_DISPLAY, PHONE_HREF } from '@/constants/contact';
 
 export const Availability = () => {
   return (
@@ -72,11 +73,11 @@ export const Availability = () => {
             </p>
           </div>
           <a
-            href="tel:+33612345678"
+            href={PHONE_HREF}
             data-testid="availability-phone-cta"
             className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-base transition-colors duration-200 shadow whitespace-nowrap"
           >
-            {"Appeler le 06 71 42 24 92"}
+            {`Appeler le ${PHONE_DISPLAY}`}
           </a>
         </div>
       </div>

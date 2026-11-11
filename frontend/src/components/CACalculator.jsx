@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Calculator, LogOut, Save } from 'lucide-react';
-import { computeMissionCA, MEAL_ALLOWANCE, TARIF_REGIMES } from '@/lib/caCalculator';
+import {
+  computeMissionCA, computePagesCA, MEAL_ALLOWANCE, TARIF_REGIMES, PAGE_TRANSLATION_RATE, PAGE_WORDS, MAX_PAGES,
+} from '@/lib/caCalculator';
 import { isSupabaseConfigured, signOutAndRedirect } from '@/lib/supabase';
 import { createMission, currentMonth } from '@/lib/missionsApi';
 import { useSession } from '@/hooks/useSession';
@@ -8,17 +11,27 @@ import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { LoginForm } from '@/components/missions/LoginForm';
 import { MissionHistory } from '@/components/missions/MissionHistory';
 import { ModeSwitch } from '@/components/missions/ModeSwitch';
-import { DateInputFr, TimeSelectFr, todayIso } from '@/components/missions/FrInputs';
-
-const eur = (n) => `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+import { DateInputFr, DatePickerButton, TimeSelectFr, todayIso } from '@/components/missions/FrInputs';
+import { eur, isoToFr, plural } from '@/lib/format';
+import { frError } from '@/lib/errors';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 const fieldClass =
   'flex h-11 sm:h-10 w-full rounded-sm border border-slate-300 bg-white px-3 py-1 text-base sm:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1E3A8A]';
 
+const MODES = [
+  { id: 'hourly', label: "Interprète (à l'heure)" },
+  { id: 'pages', label: 'Traduction écrite (à la page)' },
+];
+
+const toIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export const CACalculator = () => {
+  const [mode, setMode] = useState('hourly');
   const [date, setDate] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [pages, setPages] = useState('');
   const [client, setClient] = useState('');
   const [notes, setNotes] = useState('');
   const [withMeal, setWithMeal] = useState(false);
@@ -28,31 +41,42 @@ export const CACalculator = () => {
   const [saveMessage, setSaveMessage] = useState(null);
   const session = useSession();
   const isAdmin = useIsAdmin(session);
+  useDocumentTitle('Calculateur de CA');
 
+  const isPagesMode = mode === 'pages';
   const result = useMemo(
-    () => computeMissionCA({ date, startTime, endTime }),
-    [date, startTime, endTime]
+    () => (isPagesMode ? computePagesCA({ pages }) : computeMissionCA({ date, startTime, endTime })),
+    [isPagesMode, pages, date, startTime, endTime]
   );
+  // Le calcul à la page ne dépend pas de la date, mais l'enregistrement oui
+  const canSave = Boolean(result && date);
 
-  const mealAmount = withMeal ? MEAL_ALLOWANCE : 0;
+  const mealAmount = !isPagesMode && withMeal ? MEAL_ALLOWANCE : 0;
+  const sameTimes = !isPagesMode && date && startTime && endTime && startTime === endTime;
+  const pagesInvalid = isPagesMode && pages !== '' && !result;
 
   const onSave = async () => {
     setSaving(true);
     setSaveMessage(null);
     try {
-      await createMission({ date, startTime, endTime, client, notes, mealAmount }, result);
+      await createMission({ type: mode, date, startTime, endTime, client, notes, mealAmount }, result);
       setSaveMessage({ ok: true, text: 'Mission enregistrée.' });
       setClient('');
       setNotes('');
       setWithMeal(false);
+      if (isPagesMode) setPages('');
       setMonth(date.slice(0, 7));
       setRefreshToken((n) => n + 1);
     } catch (e) {
-      setSaveMessage({ ok: false, text: `Erreur : ${e.message}` });
+      setSaveMessage({ ok: false, text: `Enregistrement impossible : ${frError(e)}` });
     } finally {
       setSaving(false);
     }
   };
+
+  const missingHint = isPagesMode
+    ? 'Renseigne la date et le nombre de pages.'
+    : "Renseigne la date, l'heure de début et l'heure de fin.";
 
   return (
     <div className="min-h-screen bg-white">
@@ -60,7 +84,7 @@ export const CACalculator = () => {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-white text-[#0A192F] rounded-sm">
+              <div className="p-2 bg-white text-[#0A192F] rounded-sm" aria-hidden="true">
                 <Calculator className="h-5 w-5" />
               </div>
               <h1 className="font-headings font-bold text-lg sm:text-xl">Calculateur de CA de mission</h1>
@@ -81,39 +105,82 @@ export const CACalculator = () => {
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-12 space-y-6 sm:space-y-8">
         <p className="text-sm sm:text-base text-slate-700 leading-relaxed">
-          Estimez le chiffre d'affaires généré par une mission d'interprétariat oral, sur la base du
-          barème officiel des vacations (Ministère de la Justice, missions réalisées à compter du 22
-          septembre 2023). Le calcul applique la règle selon laquelle toute heure commencée est due
-          dans sa totalité, et tient compte des majorations de nuit, week-end et jours fériés.
+          {isPagesMode ? (
+            <>
+              Estimez le chiffre d'affaires d'une traduction écrite, sur la base du barème officiel (Ministère de la
+              Justice, missions réalisées à compter du 22 septembre 2023) : {eur(PAGE_TRANSLATION_RATE)} par page de
+              texte en français de {PAGE_WORDS} mots, sans majoration de nuit ou de week-end.
+            </>
+          ) : (
+            <>
+              Estimez le chiffre d'affaires généré par une mission d'interprétariat oral, sur la base du
+              barème officiel des missions d'interprétariat (Ministère de la Justice, missions réalisées à compter du 22
+              septembre 2023). Le calcul applique la règle selon laquelle toute heure commencée est due
+              dans sa totalité, et tient compte des majorations de nuit, week-end et jours fériés.
+            </>
+          )}
         </p>
 
+        {/* Type de mission */}
+        <div role="radiogroup" aria-label="Type de mission"
+          className="grid grid-cols-2 border border-slate-300 rounded-sm overflow-hidden text-sm">
+          {MODES.map((m) => (
+            <button key={m.id} type="button" role="radio" aria-checked={mode === m.id}
+              onClick={() => { setMode(m.id); setSaveMessage(null); }}
+              className={`min-h-[44px] px-2 sm:px-4 py-2 font-semibold leading-tight transition-colors ${
+                mode === m.id ? 'bg-[#1E3A8A] text-white' : 'bg-white text-[#0A192F] hover:bg-slate-50'
+              }`}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+
         {/* Formulaire */}
-        <section className="bg-slate-50 border border-slate-200 rounded-sm p-4 sm:p-6">
+        <section aria-label="Saisie de la mission" className="bg-slate-50 border border-slate-200 rounded-sm p-4 sm:p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
               <label htmlFor="mission-date" className="text-sm font-semibold text-[#0A192F]">
-                Date de la mission
+                {isPagesMode ? 'Date de remise' : 'Date de la mission'}
               </label>
               <div className="flex gap-2">
-                <DateInputFr id="mission-date" value={date} onChange={setDate} className={fieldClass} />
-                <button type="button" onClick={() => setDate(todayIso())}
-                  className="px-3 text-sm border border-slate-300 rounded-sm bg-white hover:bg-slate-100 whitespace-nowrap">
+                <DateInputFr id="mission-date" value={date} onChange={setDate} className={fieldClass} aria-describedby="mission-format-hint" />
+                <DatePickerButton value={date} onChange={setDate} />
+                <button type="button" onClick={() => setDate(todayIso())} aria-label="Date du jour" title="Date du jour"
+                  className="px-3 min-w-[44px] text-sm border border-slate-300 rounded-sm bg-white hover:bg-slate-100 whitespace-nowrap">
                   Auj.
                 </button>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label htmlFor="mission-start" className="text-sm font-semibold text-[#0A192F]">
-                Heure de début
-              </label>
-              <TimeSelectFr id="mission-start" value={startTime} onChange={setStartTime} />
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="mission-end" className="text-sm font-semibold text-[#0A192F]">
-                Heure de fin
-              </label>
-              <TimeSelectFr id="mission-end" value={endTime} onChange={setEndTime} />
-            </div>
+            {isPagesMode ? (
+              <div className="space-y-1.5">
+                <label htmlFor="mission-pages" className="text-sm font-semibold text-[#0A192F]">
+                  Nombre de pages
+                </label>
+                <input id="mission-pages" type="text" inputMode="numeric" autoComplete="off" placeholder="Ex. 12"
+                  value={pages} maxLength={4}
+                  onChange={(e) => setPages(e.target.value.replace(/\D/g, ''))}
+                  aria-invalid={pagesInvalid} aria-describedby="mission-pages-hint"
+                  className={`${fieldClass} ${pagesInvalid ? 'border-red-500' : ''}`} />
+                <p id="mission-pages-hint" className={`text-xs ${pagesInvalid ? 'text-red-600' : 'text-slate-500'}`}>
+                  Pages de {PAGE_WORDS} mots, nombre entier de 1 à {MAX_PAGES}.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <label htmlFor="mission-start" className="text-sm font-semibold text-[#0A192F]">
+                    Heure de début
+                  </label>
+                  <TimeSelectFr id="mission-start" label="Heure de début" value={startTime} onChange={setStartTime} />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor="mission-end" className="text-sm font-semibold text-[#0A192F]">
+                    Heure de fin
+                  </label>
+                  <TimeSelectFr id="mission-end" label="Heure de fin" value={endTime} onChange={setEndTime} />
+                </div>
+              </>
+            )}
           </div>
           {session && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
@@ -121,38 +188,45 @@ export const CACalculator = () => {
                 <label htmlFor="mission-client" className="text-sm font-semibold text-[#0A192F]">
                   Client / lieu (optionnel)
                 </label>
-                <input id="mission-client" type="text" value={client} placeholder="Ex. Commissariat Paris 18e"
+                <input id="mission-client" type="text" value={client} maxLength={200}
+                  placeholder={isPagesMode ? 'Ex. Tribunal judiciaire de Paris' : 'Ex. Commissariat Paris 18e'}
                   onChange={(e) => setClient(e.target.value)} className={fieldClass} />
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="mission-notes" className="text-sm font-semibold text-[#0A192F]">
                   Notes (optionnel)
                 </label>
-                <input id="mission-notes" type="text" value={notes} placeholder="N° de procédure, langue…"
+                <input id="mission-notes" type="text" value={notes} maxLength={2000} placeholder="N° de procédure, langue…"
                   onChange={(e) => setNotes(e.target.value)} className={fieldClass} />
               </div>
             </div>
           )}
-          <label className="mt-4 flex items-center gap-3 py-1 text-sm text-[#0A192F] cursor-pointer select-none">
-            <input type="checkbox" checked={withMeal} onChange={(e) => setWithMeal(e.target.checked)}
-              className="h-5 w-5 accent-[#1E3A8A]" />
-            Ajouter les frais de repas ({eur(MEAL_ALLOWANCE)})
-          </label>
-          <p className="text-xs text-slate-500 mt-3">
-            Format : date en jj/mm/aaaa, heures sur 24 h. Si l'heure de fin est antérieure à l'heure de début, la mission est considérée comme se
-            prolongeant après minuit.
+          {!isPagesMode && (
+            <label className="mt-4 flex items-center gap-3 py-1 text-sm text-[#0A192F] cursor-pointer select-none">
+              <input type="checkbox" checked={withMeal} onChange={(e) => setWithMeal(e.target.checked)}
+                className="h-5 w-5 accent-[#1E3A8A]" />
+              Ajouter les frais de repas ({eur(MEAL_ALLOWANCE)})
+            </label>
+          )}
+          <p id="mission-format-hint" className="text-xs text-slate-500 mt-3">
+            {isPagesMode
+              ? 'Format : date en jj/mm/aaaa (saisie au clavier ou via le calendrier).'
+              : "Format : date en jj/mm/aaaa (clavier ou calendrier), heures sur 24 h. Si l'heure de fin est antérieure à l'heure de début, la mission se termine le lendemain."}
           </p>
+          {sameTimes && (
+            <p role="alert" className="text-sm text-red-600 mt-2">
+              L'heure de fin doit être différente de l'heure de début.
+            </p>
+          )}
           {session && (
             <div className="mt-5 pt-5 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center gap-3">
-              <button type="button" onClick={onSave} disabled={saving || !result}
+              <button type="button" onClick={onSave} disabled={saving || !canSave}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#1E3A8A] hover:bg-[#0A192F] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-sm transition-colors">
                 <Save className="h-4 w-4" /> {saving ? 'Enregistrement…' : 'Ajouter la mission'}
               </button>
-              {!result && !saveMessage && (
-                <span className="text-sm text-slate-500">Renseigne la date, l'heure de début et l'heure de fin.</span>
-              )}
+              {!canSave && !saveMessage && <span className="text-sm text-slate-500">{missingHint}</span>}
               {saveMessage && (
-                <span className={`text-sm ${saveMessage.ok ? 'text-emerald-700' : 'text-red-600'}`}>
+                <span role={saveMessage.ok ? 'status' : 'alert'} className={`text-sm ${saveMessage.ok ? 'text-emerald-700' : 'text-red-600'}`}>
                   {saveMessage.text}
                 </span>
               )}
@@ -162,23 +236,34 @@ export const CACalculator = () => {
 
         {/* Résultat */}
         {result && (
-          <section className="space-y-6">
+          <section className="space-y-6" aria-live="polite" aria-label="Résultat du calcul">
             <div className="bg-[#0A192F] text-white rounded-sm p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                <p className="text-sm text-slate-300">
-                  {mealAmount ? 'Total de la mission (CA + repas)' : 'CA estimé de la mission'}
-                </p>
+                <p className="text-sm text-slate-300">CA estimé de la mission</p>
                 <p className="text-2xl sm:text-3xl font-bold font-headings">{eur(result.total + mealAmount)}</p>
                 {mealAmount > 0 && (
                   <p className="text-sm text-slate-300">
-                    CA {eur(result.total)} + repas {eur(mealAmount)}
+                    dont {isPagesMode ? 'traduction' : 'interprétariat'} {eur(result.total)} · dont repas {eur(mealAmount)}
                   </p>
                 )}
               </div>
-              <p className="text-sm text-slate-300">
-                Durée retenue : {result.hoursCount} heure{result.hoursCount > 1 ? 's' : ''}{' '}
-                (règle « heure commencée due en totalité »)
-              </p>
+              {isPagesMode ? (
+                <p className="text-sm text-slate-300">
+                  {plural(result.pagesCount, 'page')} × {eur(PAGE_TRANSLATION_RATE)}
+                </p>
+              ) : (
+                <div className="text-sm text-slate-300 sm:text-right space-y-1">
+                  <p>
+                    Durée retenue : {plural(result.hoursCount, 'heure')}{' '}
+                    (règle « heure commencée due en totalité »)
+                  </p>
+                  {result.endsNextDay && (
+                    <p className="font-semibold text-amber-300">
+                      Se termine le lendemain, {isoToFr(toIso(result.end))} à {endTime.replace(':', 'h')}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Mobile : liste */}
@@ -187,7 +272,7 @@ export const CACalculator = () => {
                 <li key={row.index} className="p-3 flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-[#0A192F]">
-                      {row.label} <span className="font-normal text-slate-500 capitalize">· {row.clockLabel}</span>
+                      {row.label} <span className={`font-normal text-slate-500 ${isPagesMode ? '' : 'capitalize'}`}>· {row.clockLabel}</span>
                     </p>
                     <p className="text-xs text-slate-500">{row.regimeLabel}</p>
                   </div>
@@ -200,9 +285,9 @@ export const CACalculator = () => {
               <table className="w-full text-sm border border-slate-200 rounded-sm overflow-hidden">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">Tranche</th>
-                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">Heure</th>
-                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">Régime applicable</th>
+                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">{isPagesMode ? 'Prestation' : 'Tranche'}</th>
+                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">{isPagesMode ? 'Quantité' : 'Heure'}</th>
+                    <th className="text-left px-4 py-2 font-semibold text-[#0A192F]">{isPagesMode ? 'Base' : 'Régime applicable'}</th>
                     <th className="text-right px-4 py-2 font-semibold text-[#0A192F]">Montant</th>
                   </tr>
                 </thead>
@@ -210,7 +295,7 @@ export const CACalculator = () => {
                   {result.breakdown.map((row) => (
                     <tr key={row.index} className="border-t border-slate-200">
                       <td className="px-4 py-2">{row.label}</td>
-                      <td className="px-4 py-2 capitalize whitespace-nowrap">{row.clockLabel}</td>
+                      <td className={`px-4 py-2 whitespace-nowrap ${isPagesMode ? '' : 'capitalize'}`}>{row.clockLabel}</td>
                       <td className="px-4 py-2 text-slate-600">{row.regimeLabel}</td>
                       <td className="px-4 py-2 text-right font-medium whitespace-nowrap">{eur(row.rate)}</td>
                     </tr>
@@ -265,20 +350,24 @@ export const CACalculator = () => {
               </tbody>
             </table>
           </div>
+          <p className="mt-3 text-sm text-[#0A192F] border border-slate-200 rounded-sm p-3 flex flex-wrap justify-between gap-2">
+            <span>Traduction écrite (par page de {PAGE_WORDS} mots en français)</span>
+            <span className="font-semibold">{eur(PAGE_TRANSLATION_RATE)}</span>
+          </p>
           <p className="text-xs text-slate-500 mt-3">
-            Ce calculateur porte uniquement sur la rémunération de la vacation d'interprétariat oral et
+            Ce calculateur porte uniquement sur la rémunération de la mission d'interprétariat ou de traduction et
             n'inclut pas les indemnités de déplacement ou de nuitée ; les frais de repas peuvent être ajoutés forfaitairement. Il s'agit d'une
             estimation indicative ; seul le mémoire de frais déposé sur Chorus Pro fait foi.
           </p>
         </section>
 
         <div className="pt-4">
-          <a
-            href="/"
+          <Link
+            to="/"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#0A192F] hover:bg-[#1E3A8A] text-white font-semibold rounded-sm transition-colors"
           >
             ← Retour à l'accueil
-          </a>
+          </Link>
         </div>
       </main>
     </div>

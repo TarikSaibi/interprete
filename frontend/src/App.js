@@ -31,11 +31,21 @@ const AuthLinkRedirect = () => {
   return null;
 };
 
+// Navigation entre pages : repart en haut (sauf ancre #section)
+const ScrollToTop = () => {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (!hash) window.scrollTo(0, 0);
+  }, [pathname, hash]);
+  return null;
+};
+
 const Home = () => {
   return (
     <div className="min-h-screen bg-white text-slate-950 flex flex-col font-sans">
+      <a href="#contenu" className="skip-link">Aller au contenu</a>
       <Header />
-      <main className="flex-grow">
+      <main id="contenu" tabIndex={-1} className="flex-grow focus:outline-none">
         <Hero />
         <Availability />
         <Services />
@@ -55,6 +65,7 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <AuthLinkRedirect />
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/mentions-legales" element={<LegalNotice />} />

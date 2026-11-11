@@ -2,52 +2,57 @@ import React, { Fragment, useCallback, useEffect, useMemo, useState } from 'reac
 import { ChevronDown, ChevronLeft, ChevronRight, Download, LogOut, Send, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { isSupabaseConfigured, signOutAndRedirect } from '@/lib/supabase';
 import { adminListMissionsForMonth, currentMonth, shiftMonth, inviteUser } from '@/lib/missionsApi';
-import { eur, hhmm, formatDate, isoToFr, monthLabel, meal, missionTotal, csvNum, downloadCsv } from '@/lib/format';
+import {
+  eur, hhmm, formatDate, isoToFr, monthLabel, meal, missionTotal, csvNum, downloadCsv, isPages, missionQty, plural,
+  typeTotals, sortByDate, csvTotalRows,
+} from '@/lib/format';
 import { useSession } from '@/hooks/useSession';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { LoginForm } from '@/components/missions/LoginForm';
-import { MissionCard, MissionBreakdown, MobileTotal } from '@/components/missions/MissionCards';
+import {
+  MissionCard, MissionBreakdown, MobileTotal, TypeBadge, TypeSubtotals, SubtotalRows, missionWhen,
+} from '@/components/missions/MissionCards';
 import { ModeSwitch } from '@/components/missions/ModeSwitch';
+import { Link } from 'react-router-dom';
+import { frError } from '@/lib/errors';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 const th = 'px-3 py-2 font-semibold text-[#0A192F]';
 const navBtn = 'h-10 w-10 shrink-0 inline-flex items-center justify-center border border-slate-300 rounded-sm hover:bg-slate-50';
 
+// Totaux par utilisateur et globaux (oral + écrit, avec sous-totaux par type), montants enregistrés
 function summarize(missions) {
   const byUser = new Map();
   for (const m of missions) {
-    const u = byUser.get(m.user_id) || {
-      userId: m.user_id, email: m.user_email, count: 0, hours: 0, amount: 0, meals: 0,
-    };
-    u.count += 1;
-    u.hours += m.hours_count;
-    u.amount += Number(m.amount);
-    u.meals += meal(m);
-    byUser.set(m.user_id, u);
+    if (!byUser.has(m.user_id)) byUser.set(m.user_id, { userId: m.user_id, email: m.user_email, missions: [] });
+    byUser.get(m.user_id).missions.push(m);
   }
-  const users = [...byUser.values()].sort((a, b) => a.email.localeCompare(b.email));
-  const total = users.reduce(
-    (t, u) => ({ count: t.count + u.count, hours: t.hours + u.hours, amount: t.amount + u.amount, meals: t.meals + u.meals }),
-    { count: 0, hours: 0, amount: 0, meals: 0 }
-  );
-  return { users, total };
+  const users = [...byUser.values()]
+    .map(({ missions: list, ...u }) => ({ ...u, ...typeTotals(list) }))
+    .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  return { users, total: typeTotals(missions) };
 }
 
 function exportCsv(month, missions) {
   downloadCsv(`missions-tous-utilisateurs-${month}.csv`, [
-    ['Utilisateur', 'Date', 'Début', 'Fin', 'Heures facturées', 'CA (EUR)', 'Repas (EUR)', 'Total (EUR)', 'Client / lieu', 'Notes'],
+    ['Utilisateur', 'Date', 'Type', 'Début', 'Fin', 'Heures facturées', 'Pages', 'Prestations (EUR)', 'Repas (EUR)', 'CA (EUR)', 'Client / lieu', 'Notes'],
     ...missions.map((m) => [
-      m.user_email, isoToFr(m.mission_date), hhmm(m.start_time), hhmm(m.end_time), m.hours_count,
+      m.user_email, isoToFr(m.mission_date), isPages(m) ? 'Traduction écrite' : 'Interprétariat',
+      hhmm(m.start_time), hhmm(m.end_time), m.hours_count ?? '', m.pages_count ?? '',
       csvNum(m.amount), csvNum(meal(m)), csvNum(missionTotal(m)), m.client, m.notes,
     ]),
+    ...csvTotalRows(typeTotals(missions), 1),
   ]);
 }
 
-const Shell = ({ session, isAdmin, children }) => (
+const Shell = ({ session, isAdmin, children }) => {
+  useDocumentTitle('Administration');
+  return (
   <div className="min-h-screen bg-white">
     <header className="bg-[#0A192F] text-white py-4 sm:py-6 border-b border-slate-800">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-white text-[#0A192F] rounded-sm"><ShieldCheck className="h-5 w-5" /></div>
+          <div className="p-2 bg-white text-[#0A192F] rounded-sm" aria-hidden="true"><ShieldCheck className="h-5 w-5" /></div>
           <h1 className="font-headings font-bold text-lg sm:text-xl">Administration des missions</h1>
         </div>
         {session && (
@@ -65,12 +70,13 @@ const Shell = ({ session, isAdmin, children }) => (
     <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-6 sm:space-y-8">
       {children}
       <div className="pt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-        <a href="/calculateur-ca" className="text-[#1E3A8A] hover:underline">← Calculateur</a>
-        <a href="/" className="text-[#1E3A8A] hover:underline">Accueil</a>
+        <Link to="/calculateur-ca" className="inline-flex items-center min-h-[40px] text-[#1E3A8A] hover:underline">← Calculateur</Link>
+        <Link to="/" className="inline-flex items-center min-h-[40px] text-[#1E3A8A] hover:underline">Accueil</Link>
       </div>
     </main>
   </div>
-);
+  );
+};
 
 export const AdminPage = () => {
   const session = useSession();
@@ -80,7 +86,7 @@ export const AdminPage = () => {
     return <Shell session={null}><p className="text-red-600">Supabase n'est pas configuré.</p></Shell>;
   }
   if (session === undefined || (session && isAdmin === undefined)) {
-    return <Shell session={session}><p className="text-slate-500">Chargement…</p></Shell>;
+    return <Shell session={session}><p role="status" className="text-slate-500">Chargement…</p></Shell>;
   }
   if (!session) {
     return <Shell session={null}><LoginForm /></Shell>;
@@ -109,7 +115,7 @@ const InviteUserForm = () => {
       setMessage({ ok: true, text: `Invitation envoyée à ${sent}.` });
       setEmail('');
     } catch (err) {
-      setMessage({ ok: false, text: err.message });
+      setMessage({ ok: false, text: `Invitation impossible : ${frError(err)}` });
     } finally {
       setSending(false);
     }
@@ -121,7 +127,7 @@ const InviteUserForm = () => {
         <UserPlus className="h-5 w-5" /> Inviter un utilisateur
       </h2>
       <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-3">
-        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+        <input id="invite-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
           placeholder="email@exemple.fr" aria-label="Email à inviter" autoComplete="off"
           className="h-11 sm:h-10 w-full sm:flex-1 rounded-sm border border-slate-300 bg-white px-3 text-base sm:text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#1E3A8A]" />
         <button type="submit" disabled={sending}
@@ -129,7 +135,7 @@ const InviteUserForm = () => {
           <Send className="h-4 w-4" /> {sending ? 'Envoi…' : "Envoyer l'invitation"}
         </button>
       </form>
-      {message && <p className={`text-sm ${message.ok ? 'text-emerald-700' : 'text-red-600'}`}>{message.text}</p>}
+      {message && <p role={message.ok ? 'status' : 'alert'} className={`text-sm ${message.ok ? 'text-emerald-700' : 'text-red-600'}`}>{message.text}</p>}
       <p className="text-xs text-slate-500">
         La personne reçoit un email pour choisir son mot de passe, puis accède à son propre historique de missions.
       </p>
@@ -151,7 +157,7 @@ const AdminDashboard = () => {
     try {
       setMissions(await adminListMissionsForMonth(month));
     } catch (e) {
-      setError(`Chargement impossible : ${e.message}`);
+      setError(`Chargement impossible : ${frError(e)}`);
       setMissions([]);
     } finally {
       setLoading(false);
@@ -169,10 +175,10 @@ const AdminDashboard = () => {
 
   const { users, total } = useMemo(() => summarize(missions), [missions]);
   const visible = useMemo(
-    () => (userFilter === 'all' ? missions : missions.filter((m) => m.user_id === userFilter)),
+    () => sortByDate(userFilter === 'all' ? missions : missions.filter((m) => m.user_id === userFilter)),
     [missions, userFilter]
   );
-  const visibleTotal = useMemo(() => summarize(visible).total, [visible]);
+  const visibleTotal = useMemo(() => typeTotals(visible), [visible]);
 
   return (
     <>
@@ -201,13 +207,19 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <Stat label="Utilisateurs actifs" value={users.length} />
         <Stat label="Missions" value={total.count} />
-        <Stat label="Heures facturées" value={`${total.hours} h`} />
-        <Stat label="Frais de repas" value={eur(total.meals)} />
-        <Stat label="Total du mois" value={eur(total.amount + total.meals)} sub={`dont CA ${eur(total.amount)}`} dark
+        <Stat label="Heures facturées" value={`${total.hours} h`}
+          sub={total.pages > 0 ? `+ ${plural(total.pages, 'page')}` : undefined} />
+        <Stat label="Frais de repas" value={eur(total.meals)} sub="inclus dans le CA" />
+        <Stat label="CA du mois" value={eur(total.amount + total.meals)}
+          sub={`dont prestations ${eur(total.amount)} · dont repas ${eur(total.meals)}`} dark
           className="col-span-2 sm:col-span-1" />
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {!loading && total.count > 0 && (
+        <TypeSubtotals totals={total} className="border border-slate-200 rounded-sm p-3 text-[#0A192F]" />
+      )}
+
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
       {/* Récapitulatif par utilisateur */}
       <section className="space-y-3">
@@ -220,19 +232,21 @@ const AdminDashboard = () => {
           {!loading && users.map((u) => (
             <button key={u.userId} type="button"
               onClick={() => setUserFilter(userFilter === u.userId ? 'all' : u.userId)}
+              aria-pressed={userFilter === u.userId}
               className={`w-full text-left border rounded-sm p-3 flex items-start justify-between gap-3 ${userFilter === u.userId ? 'border-[#1E3A8A] bg-blue-50' : 'border-slate-200 bg-white'}`}>
               <span className="min-w-0">
                 <span className="block font-medium text-[#0A192F] truncate">{u.email}</span>
-                <span className="block text-sm text-slate-600">{u.count} mission{u.count > 1 ? 's' : ''} · {u.hours} h</span>
+                <span className="block text-sm text-slate-600">{plural(u.count, 'mission')} · {u.hours} h{u.pages > 0 && ` · ${plural(u.pages, 'page')}`}</span>
+                <TypeSubtotals totals={u} asSpans className="mt-1 text-xs text-slate-600" />
               </span>
               <span className="text-right shrink-0">
-                <span className="block font-bold text-[#0A192F] whitespace-nowrap">{eur(u.amount + u.meals)}</span>
-                <span className="block text-xs text-slate-500 whitespace-nowrap">CA {eur(u.amount)} · repas {eur(u.meals)}</span>
+                <span className="block font-bold text-[#0A192F] whitespace-nowrap">CA {eur(u.amount + u.meals)}</span>
+                <span className="block text-xs text-slate-500 whitespace-nowrap">dont repas {eur(u.meals)}</span>
               </span>
             </button>
           ))}
           {!loading && users.length > 0 && (
-            <MobileTotal label="Total" hours={total.hours} amount={total.amount} meals={total.meals} />
+            <MobileTotal label="Tous les utilisateurs" hours={total.hours} pages={total.pages} amount={total.amount} meals={total.meals} subtotals={total} />
           )}
         </div>
         <div className="hidden md:block overflow-x-auto">
@@ -242,24 +256,35 @@ const AdminDashboard = () => {
                 <th className={`${th} text-left`}>Utilisateur</th>
                 <th className={`${th} text-right`}>Missions</th>
                 <th className={`${th} text-right`}>Heures</th>
+                <th className={`${th} text-right`}>CA oral</th>
+                <th className={`${th} text-right`}>Pages</th>
+                <th className={`${th} text-right`}>CA écrit</th>
+                <th className={`${th} text-right`}>dont repas</th>
                 <th className={`${th} text-right`}>CA</th>
-                <th className={`${th} text-right`}>Repas</th>
-                <th className={`${th} text-right`}>Total</th>
               </tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Chargement…</td></tr>}
+              {loading && <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-500">Chargement…</td></tr>}
               {!loading && !users.length && (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Aucune mission ce mois-ci.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-6 text-center text-slate-500">Aucune mission ce mois-ci.</td></tr>
               )}
               {!loading && users.map((u) => (
                 <tr key={u.userId}
+                  tabIndex={0}
                   onClick={() => setUserFilter(userFilter === u.userId ? 'all' : u.userId)}
-                  className={`border-t border-slate-200 cursor-pointer hover:bg-slate-50 ${userFilter === u.userId ? 'bg-blue-50' : ''}`}>
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setUserFilter(userFilter === u.userId ? 'all' : u.userId);
+                    }
+                  }}
+                  className={`border-t border-slate-200 cursor-pointer hover:bg-slate-50 focus-visible:bg-slate-50 ${userFilter === u.userId ? 'bg-blue-50' : ''}`}>
                   <td className="px-4 py-2">{u.email}</td>
                   <td className="px-4 py-2 text-right">{u.count}</td>
-                  <td className="px-4 py-2 text-right">{u.hours} h</td>
-                  <td className="px-4 py-2 text-right whitespace-nowrap">{eur(u.amount)}</td>
+                  <td className="px-4 py-2 text-right">{u.oral.count ? `${u.hours} h` : '—'}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">{u.oral.count ? eur(u.oral.amount + u.oral.meals) : '—'}</td>
+                  <td className="px-4 py-2 text-right">{u.written.count ? u.pages : '—'}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">{u.written.count ? eur(u.written.amount + u.written.meals) : '—'}</td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">{eur(u.meals)}</td>
                   <td className="px-4 py-2 text-right font-medium whitespace-nowrap">{eur(u.amount + u.meals)}</td>
                 </tr>
@@ -268,10 +293,12 @@ const AdminDashboard = () => {
             {!loading && users.length > 0 && (
               <tfoot className="bg-slate-50 font-semibold text-[#0A192F]">
                 <tr className="border-t-2 border-slate-300">
-                  <td className="px-4 py-2">Total</td>
+                  <td className="px-4 py-2">CA du mois</td>
                   <td className="px-4 py-2 text-right">{total.count}</td>
                   <td className="px-4 py-2 text-right">{total.hours} h</td>
-                  <td className="px-4 py-2 text-right whitespace-nowrap">{eur(total.amount)}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">{eur(total.oral.amount + total.oral.meals)}</td>
+                  <td className="px-4 py-2 text-right">{total.pages || '—'}</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">{eur(total.written.amount + total.written.meals)}</td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">{eur(total.meals)}</td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">{eur(total.amount + total.meals)}</td>
                 </tr>
@@ -293,6 +320,7 @@ const AdminDashboard = () => {
           </select>
         </div>
         <div className="md:hidden border border-slate-200 rounded-sm divide-y divide-slate-200 overflow-hidden">
+          {loading && <p role="status" className="py-4 text-center text-slate-500">Chargement…</p>}
           {!loading && !visible.length && <p className="py-4 text-center text-slate-500">Aucune mission.</p>}
           {!loading && visible.map((m) => (
             <MissionCard key={m.id} mission={m} showUser expanded={expanded === m.id}
@@ -300,8 +328,9 @@ const AdminDashboard = () => {
           ))}
           {!loading && visible.length > 0 && (
             <MobileTotal
-              label={userFilter === 'all' ? 'Total tous utilisateurs' : `Total ${users.find((u) => u.userId === userFilter)?.email ?? ''}`}
-              hours={visibleTotal.hours} amount={visibleTotal.amount} meals={visibleTotal.meals} />
+              label={userFilter === 'all' ? 'Tous les utilisateurs' : users.find((u) => u.userId === userFilter)?.email ?? ''}
+              hours={visibleTotal.hours} pages={visibleTotal.pages} amount={visibleTotal.amount} meals={visibleTotal.meals}
+              subtotals={visibleTotal} />
           )}
         </div>
         <div className="hidden md:block overflow-x-auto">
@@ -311,15 +340,16 @@ const AdminDashboard = () => {
                 <th className="w-8" />
                 <th className={`${th} text-left`}>Utilisateur</th>
                 <th className={`${th} text-left`}>Date</th>
-                <th className={`${th} text-left`}>Horaires</th>
+                <th className={`${th} text-left`}>Type / horaires</th>
                 <th className={`${th} text-left`}>Client / lieu</th>
-                <th className={`${th} text-right`}>Heures</th>
-                <th className={`${th} text-right`}>CA</th>
+                <th className={`${th} text-right`}>Quantité</th>
+                <th className={`${th} text-right`}>Prestations</th>
                 <th className={`${th} text-right`}>Repas</th>
-                <th className={`${th} text-right`}>Total</th>
+                <th className={`${th} text-right`}>CA</th>
               </tr>
             </thead>
             <tbody>
+              {loading && <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-500">Chargement…</td></tr>}
               {!loading && !visible.length && (
                 <tr><td colSpan={9} className="px-4 py-6 text-center text-slate-500">Aucune mission.</td></tr>
               )}
@@ -327,16 +357,16 @@ const AdminDashboard = () => {
                 <Fragment key={m.id}>
                   <tr className="border-t border-slate-200">
                     <td className="pl-2">
-                      <button type="button" aria-label="Détail" onClick={() => setExpanded(expanded === m.id ? null : m.id)}
-                        className="p-1 text-slate-500 hover:text-[#0A192F]">
+                      <button type="button" aria-label="Détail heure par heure" aria-expanded={expanded === m.id} onClick={() => setExpanded(expanded === m.id ? null : m.id)}
+                        className="h-9 w-9 inline-flex items-center justify-center text-slate-500 hover:text-[#0A192F]">
                         <ChevronDown className={`h-4 w-4 transition-transform ${expanded === m.id ? 'rotate-180' : ''}`} />
                       </button>
                     </td>
                     <td className="px-4 py-2 text-slate-600">{m.user_email}</td>
                     <td className="px-4 py-2 capitalize whitespace-nowrap">{formatDate(m.mission_date)}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{hhmm(m.start_time)} → {hhmm(m.end_time)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap"><TypeBadge mission={m} /> {missionWhen(m)}</td>
                     <td className="px-4 py-2 text-slate-600">{m.client || '—'}</td>
-                    <td className="px-4 py-2 text-right">{m.hours_count} h</td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">{missionQty(m)}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{eur(m.amount)}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap text-slate-600">{meal(m) ? eur(meal(m)) : '—'}</td>
                     <td className="px-4 py-2 text-right font-medium whitespace-nowrap">{eur(missionTotal(m))}</td>
@@ -354,12 +384,13 @@ const AdminDashboard = () => {
             </tbody>
             {!loading && visible.length > 0 && (
               <tfoot className="bg-slate-50 font-semibold text-[#0A192F]">
+                <SubtotalRows totals={visibleTotal} labelSpan={4} cell="px-4 py-2" />
                 <tr className="border-t-2 border-slate-300">
                   <td />
                   <td colSpan={4} className="px-4 py-2">
-                    Total {userFilter === 'all' ? 'tous utilisateurs' : users.find((u) => u.userId === userFilter)?.email}
+                    CA du mois — {userFilter === 'all' ? 'tous utilisateurs' : users.find((u) => u.userId === userFilter)?.email}
                   </td>
-                  <td className="px-4 py-2 text-right">{visibleTotal.hours} h</td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap">{visibleTotal.hours} h{visibleTotal.pages > 0 && ` · ${visibleTotal.pages} p.`}</td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">{eur(visibleTotal.amount)}</td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">{eur(visibleTotal.meals)}</td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">{eur(visibleTotal.amount + visibleTotal.meals)}</td>
@@ -377,6 +408,6 @@ const Stat = ({ label, value, sub, dark, className = '' }) => (
   <div className={`${dark ? 'bg-[#0A192F] text-white' : 'bg-slate-50 border border-slate-200'} rounded-sm p-3 sm:p-4 ${className}`}>
     <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-500'}`}>{label}</p>
     <p className={`text-xl sm:text-2xl font-bold whitespace-nowrap ${dark ? '' : 'text-[#0A192F]'}`}>{value}</p>
-    {sub && <p className="text-xs text-slate-300">{sub}</p>}
+    {sub && <p className={`text-xs ${dark ? 'text-slate-300' : 'text-slate-500'}`}>{sub}</p>}
   </div>
 );

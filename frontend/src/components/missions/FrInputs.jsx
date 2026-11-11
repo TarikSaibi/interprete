@@ -57,6 +57,58 @@ export const DateInputFr = ({ value, onChange, className, ...props }) => {
   );
 };
 
+// ---- Calendrier : vrai bouton qui ouvre le sélecteur de date natif du système (aucune dépendance) ----
+// L'<input type="date"> reste dans le DOM (showPicker() refuse un élément non rendu, donc pas de display:none)
+// mais il est invisible, hors tabulation et ne reçoit aucun clic : c'est le bouton, sur toute sa surface,
+// qui l'ouvre. Valeur échangée au format ISO 'YYYY-MM-DD' ; '' quand l'utilisateur efface la date.
+export const openNativePicker = (el) => {
+  if (!el) return;
+  try {
+    if (typeof el.showPicker === 'function') {
+      el.showPicker(); // Chrome/Edge 99+, Firefox 101+, Safari 16+
+      return;
+    }
+  } catch {
+    /* NotAllowedError / non pris en charge : repli ci-dessous */
+  }
+  try {
+    el.focus(); // iOS / Android anciens : le focus d'un champ date ouvre le sélecteur
+    el.click();
+  } catch {
+    /* rien de plus à tenter */
+  }
+};
+
+export const DatePickerButton = ({ value, onChange, label = 'Choisir une date dans le calendrier' }) => {
+  const inputRef = React.useRef(null);
+  return (
+    <span className="relative inline-flex shrink-0 h-11 sm:h-10 w-11 sm:w-10">
+      <input
+        ref={inputRef}
+        type="date"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={value || ''}
+        min="2000-01-01"
+        max="2099-12-31"
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 w-full h-full opacity-0 pointer-events-none text-base"
+      />
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        onClick={() => openNativePicker(inputRef.current)}
+        className="relative h-full w-full inline-flex items-center justify-center border border-slate-300 rounded-sm bg-white text-slate-600 hover:bg-slate-100 hover:text-[#0A192F]"
+      >
+        <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+        </svg>
+      </button>
+    </span>
+  );
+};
+
 // ---- Heure : deux champs heures / minutes ; saisie au clavier OU choix dans une liste (flèche ▾), 24 h ----
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
@@ -88,6 +140,7 @@ const ComboPart = React.forwardRef(
     }, [open]);
 
     const current = normalize(value, 99);
+    const listId = React.useId();
 
     return (
       <div ref={rootRef} className="relative flex-1 min-w-0">
@@ -101,6 +154,11 @@ const ComboPart = React.forwardRef(
           placeholder={placeholder}
           aria-label={ariaLabel}
           aria-invalid={invalid}
+          role="combobox"
+          aria-autocomplete="none"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
           value={value}
           onChange={(e) => {
             setOpen(false);
@@ -121,7 +179,7 @@ const ComboPart = React.forwardRef(
         <button
           type="button"
           tabIndex={-1}
-          aria-label={`Choisir ${ariaLabel.toLowerCase()}`}
+          aria-label={`Choisir : ${ariaLabel}`}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setOpen((o) => !o)}
           className="absolute inset-y-0 right-0 w-8 flex items-center justify-center text-slate-500 hover:text-[#0A192F]"
@@ -133,7 +191,9 @@ const ComboPart = React.forwardRef(
         {open && (
           <ul
             ref={listRef}
+            id={listId}
             role="listbox"
+            aria-label={ariaLabel}
             className="absolute z-30 left-0 right-0 mt-1 max-h-56 overflow-y-auto rounded-sm border border-slate-200 bg-white shadow-lg py-1"
           >
             {options.map((o) => (
@@ -160,7 +220,8 @@ const ComboPart = React.forwardRef(
   }
 );
 
-export const TimeSelectFr = ({ id, value, onChange }) => {
+// label : libellé du champ (ex. « Heure de début »), repris par les lecteurs d'écran sur chaque partie
+export const TimeSelectFr = ({ id, value, onChange, label }) => {
   const [h, setH] = useState(value ? value.slice(0, 2) : '');
   const [m, setM] = useState(value ? value.slice(3, 5) : '');
   const minutesRef = React.useRef(null);
@@ -212,12 +273,12 @@ export const TimeSelectFr = ({ id, value, onChange }) => {
   };
 
   return (
-    <div className="flex items-center gap-1.5">
-      <ComboPart id={id} value={h} options={HOURS} placeholder="HH" ariaLabel="Heures"
+    <div role="group" aria-label={label} className="flex items-center gap-1.5">
+      <ComboPart id={id} value={h} options={HOURS} placeholder="HH" ariaLabel={label ? `${label} — heures` : 'Heures'}
         invalid={h !== '' && !normalize(h, 23)}
         onType={onHourType} onPick={(v) => onHourType(v)} onBlur={onHourBlur} />
-      <span className="text-sm font-semibold text-slate-600">h</span>
-      <ComboPart ref={minutesRef} value={m} options={MINUTES} placeholder="mm" ariaLabel="Minutes"
+      <span className="text-sm font-semibold text-slate-600" aria-hidden="true">h</span>
+      <ComboPart ref={minutesRef} value={m} options={MINUTES} placeholder="mm" ariaLabel={label ? `${label} — minutes` : 'Minutes'}
         invalid={m !== '' && !normalize(m, 59)}
         onType={(v) => emit(h, v)} onPick={(v) => emit(h, v)} onBlur={onMinuteBlur} />
     </div>

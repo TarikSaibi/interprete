@@ -1,15 +1,18 @@
 import React from 'react';
 import { Phone, Clock, ShieldCheck } from 'lucide-react';
 import { INTERPRETER } from '@/constants/testIds';
+import { PHONE_DISPLAY, PHONE_HREF, WHATSAPP_HREF } from '@/constants/contact';
+import { WhatsAppIcon } from '@/components/WhatsAppIcon';
 
 export const Hero = () => {
   return (
     <section className="relative bg-slate-900 min-h-[75vh] md:min-h-[85vh] flex items-center justify-start overflow-hidden">
       {/* Background Image with Dark Overlay */}
       <div 
+        aria-hidden="true"
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{ 
-          backgroundImage: 'url("https://images.pexels.com/photos/30754785/pexels-photo-30754785.jpeg")' 
+          backgroundImage: 'url("https://images.pexels.com/photos/30754785/pexels-photo-30754785.jpeg?auto=compress&cs=tinysrgb&w=1600")' 
         }}
       />
       <div className="absolute inset-0 bg-[#0A192F]/85 mix-blend-multiply" />
@@ -64,24 +67,22 @@ export const Hero = () => {
           {/* Call to Actions */}
           <div className="flex flex-col sm:flex-row gap-4 pt-2">
             <a
-              href="tel:+33612345678"
+              href={PHONE_HREF}
               data-testid={INTERPRETER.heroPhoneCta}
               className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-red-600 hover:bg-red-700 text-white font-bold text-lg transition-all duration-200 shadow-lg hover:scale-[1.01]"
             >
               <Phone className="h-5 w-5 animate-bounce" />
-              <span>{"Appel d'Urgence : 06 71 42 24 92"}</span>
+              <span>{`Appel d'Urgence : ${PHONE_DISPLAY}`}</span>
             </a>
             
             <a
-              href="https://wa.me/33612345678"
+              href={WHATSAPP_HREF}
               target="_blank"
               rel="noopener noreferrer"
               data-testid={INTERPRETER.heroWhatsappCta}
               className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg transition-all duration-200 shadow-lg hover:scale-[1.01]"
             >
-              <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
-                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.731-1.456L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.963C16.528 2.019 14.074 1 11.996 1c-5.441 0-9.864 4.37-9.868 9.8-.001 1.77.473 3.5 1.372 5.015L2.516 21.57l6.13-1.603z" />
-              </svg>
+              <WhatsAppIcon />
               <span>{"Contacter sur WhatsApp"}</span>
             </a>
           </div>

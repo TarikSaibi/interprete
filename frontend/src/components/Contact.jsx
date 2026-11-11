@@ -1,6 +1,8 @@
 import React from 'react';
 import { Phone, Mail, Clock, ShieldAlert } from 'lucide-react';
 import { INTERPRETER } from '@/constants/testIds';
+import { PHONE_DISPLAY, PHONE_HREF, WHATSAPP_HREF, EMAIL } from '@/constants/contact';
+import { WhatsAppIcon } from '@/components/WhatsAppIcon';
 
 export const Contact = () => {
   return (
@@ -47,7 +49,7 @@ export const Contact = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
               {/* Phone connection */}
               <a
-                href="tel:+33612345678"
+                href={PHONE_HREF}
                 data-testid={INTERPRETER.phoneContactLink}
                 className="bg-slate-900/50 hover:bg-slate-900 border border-slate-800 p-6 flex flex-col items-center justify-center text-center space-y-3 transition-colors duration-200 group"
               >
@@ -59,23 +61,21 @@ export const Contact = () => {
                     {"Par Téléphone (24/7)"}
                   </p>
                   <p className="text-lg font-bold text-white font-headings">
-                    {"06 71 42 24 92"}
+                    {PHONE_DISPLAY}
                   </p>
                 </div>
               </a>
 
               {/* WhatsApp Connection */}
               <a
-                href="https://wa.me/33612345678"
+                href={WHATSAPP_HREF}
                 target="_blank"
                 rel="noopener noreferrer"
                 data-testid={INTERPRETER.whatsappContactLink}
                 className="bg-slate-900/50 hover:bg-slate-900 border border-slate-800 p-6 flex flex-col items-center justify-center text-center space-y-3 transition-colors duration-200 group"
               >
                 <div className="p-3.5 bg-emerald-600 text-white rounded-full group-hover:scale-105 transition-transform duration-200">
-                  <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
-                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.513 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.731-1.456L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.963C16.528 2.019 14.074 1 11.996 1c-5.441 0-9.864 4.37-9.868 9.8-.001 1.77.473 3.5 1.372 5.015L2.516 21.57l6.13-1.603z" />
-                  </svg>
+                  <WhatsAppIcon />
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
@@ -89,7 +89,7 @@ export const Contact = () => {
 
               {/* Email Connection */}
               <a
-                href="mailto:kenzaalim@gmail.com"
+                href={`mailto:${EMAIL}`}
                 data-testid={INTERPRETER.emailContactLink}
                 className="bg-slate-900/50 hover:bg-slate-900 border border-slate-800 p-6 flex flex-col items-center justify-center text-center space-y-3 transition-colors duration-200 group"
               >
@@ -101,7 +101,7 @@ export const Contact = () => {
                     {"Par Courriel"}
                   </p>
                   <p className="text-sm font-bold text-white font-headings break-all">
-                    {"kenzaalim@gmail.com"}
+                    {EMAIL}
                   </p>
                 </div>
               </a>

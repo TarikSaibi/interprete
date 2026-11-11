@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /calculateur-ca
+Disallow: /admin
+Disallow: /definir-mot-de-passe
+
+Sitemap: https://kenzaalim-interprete.fr/sitemap.xml

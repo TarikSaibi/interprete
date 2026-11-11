@@ -1,0 +1,14 @@
+# Mises à jour automatiques proposées en pull request (rien n'est fusionné automatiquement)
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "monthly"
+    # Correctifs de sécurité uniquement pour npm (évite le bruit des montées de version CRA)
+    open-pull-requests-limit: 0

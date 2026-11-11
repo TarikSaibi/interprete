@@ -7,9 +7,10 @@ export const ProfessionalStatus = () => {
     <section id="statut" className="relative py-16 sm:py-24 bg-white overflow-hidden">
       {/* Marble Texture Background with low opacity */}
       <div 
+        aria-hidden="true"
         className="absolute inset-0 opacity-[0.04] pointer-events-none bg-cover bg-center"
         style={{ 
-          backgroundImage: 'url("https://images.pexels.com/photos/4049752/pexels-photo-4049752.jpeg")' 
+          backgroundImage: 'url("https://images.pexels.com/photos/4049752/pexels-photo-4049752.jpeg?auto=compress&cs=tinysrgb&w=1280")' 
         }}
       />
 

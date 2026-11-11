@@ -32,26 +32,27 @@ export async function listMissionsForMonth(month) {
   return data;
 }
 
-// result = sortie de computeMissionCA ; le montant et le détail sont figés à la saisie
-export async function createMission({ date, startTime, endTime, client, notes, mealAmount = 0 }, result) {
+const frozenBreakdown = (result) =>
+  result.breakdown.map(({ label, clockLabel, regimeLabel, rate }) => ({ label, clockLabel, regimeLabel, rate }));
+
+// type 'hourly' (défaut) : result = sortie de computeMissionCA
+// type 'pages'           : result = sortie de computePagesCA (pas d'horaires ni de repas)
+// Le montant et le détail sont figés à la saisie.
+export async function createMission({ type = 'hourly', date, startTime, endTime, client, notes, mealAmount = 0 }, result) {
+  const common = {
+    mission_date: date,
+    client: client?.trim() || null,
+    notes: notes?.trim() || null,
+    amount: result.total,
+    breakdown: frozenBreakdown(result),
+  };
+  const row =
+    type === 'pages'
+      ? { ...common, mission_type: 'pages', pages_count: result.pagesCount, start_time: null, end_time: null, hours_count: null, meal_amount: 0 }
+      : { ...common, start_time: startTime, end_time: endTime, hours_count: result.hoursCount, meal_amount: mealAmount };
   const { data, error } = await supabase
     .from('missions')
-    .insert({
-      mission_date: date,
-      start_time: startTime,
-      end_time: endTime,
-      client: client?.trim() || null,
-      notes: notes?.trim() || null,
-      hours_count: result.hoursCount,
-      amount: result.total,
-      meal_amount: mealAmount,
-      breakdown: result.breakdown.map(({ label, clockLabel, regimeLabel, rate }) => ({
-        label,
-        clockLabel,
-        regimeLabel,
-        rate,
-      })),
-    })
+    .insert(row)
     .select()
     .single();
   if (error) throw error;
