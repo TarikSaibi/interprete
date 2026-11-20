@@ -1,0 +1,180 @@
+name: Supabase backup (chiffré)
+
+# Sauvegarde hebdomadaire de la base Supabase (schéma public : structure + données + policies RLS + droits),
+# CHIFFRÉE avant d'être stockée comme artifact GitHub.
+#
+# !!! Dépôt PUBLIC : les artifacts sont téléchargeables par n'importe quel compte GitHub connecté.
+# !!! Le dump n'est donc JAMAIS écrit en clair : pg_dump est envoyé directement dans gpg (AES-256),
+# !!! la sécurité de la sauvegarde repose entièrement sur la phrase de passe BACKUP_PASSPHRASE.
+#
+# ---------------------------------------------------------------------------------------------------
+# Secrets à créer : Settings > Secrets and variables > Actions > Repository secrets
+#
+#   SUPABASE_DB_URL     Chaîne de connexion Postgres du « Session pooler » (port 5432) :
+#                       Supabase > Project Settings > Database > Connection string > Session pooler
+#                       Forme : postgresql://postgres.<ref-projet>:<mot-de-passe-db>@aws-0-<region>.pooler.supabase.com:5432/postgres
+#                       - PAS la « Direct connection » (db.<ref>.supabase.co : IPv6 uniquement, injoignable
+#                         depuis les runners GitHub) ;
+#                       - PAS le « Transaction pooler » (port 6543 : incompatible avec pg_dump).
+#                       Mot de passe avec caractères spéciaux (@ : / ? # %) : l'encoder en URL (%40, %3A…).
+#
+#   BACKUP_PASSPHRASE   Phrase de passe de chiffrement, longue et aléatoire (32 caractères ou plus),
+#                       ex. générée par : openssl rand -base64 32
+#                       À CONSERVER AILLEURS (gestionnaire de mots de passe) : sans elle, les sauvegardes
+#                       sont irrécupérables ; GitHub ne permet pas de relire un secret.
+#
+# ---------------------------------------------------------------------------------------------------
+# Déchiffrement / restauration (sur ton poste, avec gpg et le client PostgreSQL de même version majeure) :
+#
+#   1. Actions > « Supabase backup (chiffré) » > run voulu > Artifacts > télécharger puis dézipper.
+#   2. Déchiffrer (la phrase de passe est demandée) :
+#        gpg --output supabase-public.dump --decrypt supabase-public-AAAAMMJJTHHMMSSZ.dump.gpg
+#   3. Vérifier le contenu :
+#        pg_restore --list supabase-public.dump | less
+#   4. Restaurer (de préférence d'abord dans un projet Supabase de test) :
+#        pg_restore --dbname="postgresql://…session-pooler…/postgres" \
+#          --no-owner --clean --if-exists --schema=public supabase-public.dump
+#      --clean supprime puis recrée les objets du schéma public : à n'utiliser qu'en connaissance de cause.
+#      Restauration d'une seule table, ex. les missions :  ... --data-only --table=missions supabase-public.dump
+#   5. Effacer le fichier déchiffré après usage (il contient les données en clair) :
+#        shred -u supabase-public.dump   (ou rm sur macOS)
+#
+# Limites : seul le schéma public est sauvegardé. Les comptes (auth.users) ne le sont pas : missions.user_id
+# référence auth.users, donc une restauration dans un NOUVEAU projet exige de recréer les utilisateurs avec
+# les mêmes UUID (dans le même projet, rien à faire). Les Edge Functions sont dans le dépôt (supabase/functions).
+# Rappel GitHub : dans un dépôt public, les workflows planifiés sont désactivés après 60 jours sans activité.
+# ---------------------------------------------------------------------------------------------------
+
+on:
+  schedule:
+    - cron: "30 3 * * 0" # dimanche à 3h30 UTC
+  workflow_dispatch:
+
+# Aucun droit sur le dépôt : l'envoi d'artifact n'utilise pas GITHUB_TOKEN
+permissions: {}
+
+concurrency:
+  group: supabase-backup
+  cancel-in-progress: false
+
+env:
+  # Version majeure du client PostgreSQL : doit être >= à celle du serveur Supabase
+  # (pg_dump sait lire les serveurs plus anciens, pas les plus récents). Vérifiée à l'étape « Version serveur ».
+  # Version du serveur : Supabase > Project Settings > Infrastructure, ou « select version(); » dans le SQL Editor.
+  PG_MAJOR: "17"
+  RETENTION_DAYS: "90"
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Vérifier les secrets
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          url="$(printf '%s' "$SUPABASE_DB_URL" | tr -d '[:space:]"'"'")"
+          if [ -z "$url" ]; then
+            echo "::error::Secret SUPABASE_DB_URL absent ou vide (Settings > Secrets and variables > Actions > Repository secrets). Utiliser la chaîne « Session pooler » de Supabase."
+            exit 1
+          fi
+          case "$url" in
+            postgres://*|postgresql://*) ;;
+            *) echo "::error::SUPABASE_DB_URL doit commencer par postgresql:// (chaîne « Session pooler » de Supabase, port 5432)."; exit 1 ;;
+          esac
+          case "$url" in
+            *:6543/*) echo "::error::SUPABASE_DB_URL pointe sur le Transaction pooler (port 6543), incompatible avec pg_dump : utiliser le Session pooler (port 5432)."; exit 1 ;;
+          esac
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Secret BACKUP_PASSPHRASE absent ou vide : la sauvegarde ne peut pas être chiffrée, elle n'est donc pas réalisée."
+            exit 1
+          fi
+          if [ "${#BACKUP_PASSPHRASE}" -lt 20 ]; then
+            echo "::error::BACKUP_PASSPHRASE trop courte (20 caractères minimum, 32+ conseillé) : les artifacts d'un dépôt public sont téléchargeables par tous."
+            exit 1
+          fi
+          echo "Secrets présents."
+
+      - name: Installer le client PostgreSQL ${{ env.PG_MAJOR }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common gnupg > /dev/null
+          # Dépôt officiel PGDG (apt.postgresql.org) : versions récentes du client
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq "postgresql-client-${PG_MAJOR}" > /dev/null
+          echo "PGBIN=/usr/lib/postgresql/${PG_MAJOR}/bin" >> "$GITHUB_ENV"
+          "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" --version
+
+      - name: Version serveur (compatibilité pg_dump)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          url="$(printf '%s' "$SUPABASE_DB_URL" | tr -d '[:space:]"'"'")"
+          if ! num="$(PGCONNECT_TIMEOUT=20 "$PGBIN/psql" --dbname="$url" --no-psqlrc -Atqc 'show server_version_num')"; then
+            echo "::error::Connexion à la base impossible (mot de passe, URL du Session pooler, ou projet Supabase en pause)."
+            exit 1
+          fi
+          server_major=$(( num / 10000 ))
+          echo "Serveur PostgreSQL ${server_major} ; client pg_dump ${PG_MAJOR}."
+          if [ "$server_major" -gt "$PG_MAJOR" ]; then
+            echo "::error::Le serveur Supabase est en PostgreSQL ${server_major}, plus récent que pg_dump ${PG_MAJOR} : passer PG_MAJOR à \"${server_major}\" dans ce workflow."
+            exit 1
+          fi
+
+      - name: Dump chiffré (aucune donnée en clair sur le disque)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          url="$(printf '%s' "$SUPABASE_DB_URL" | tr -d '[:space:]"'"'")"
+          mkdir -p "$RUNNER_TEMP/backup"
+          name="supabase-public-$(date -u +%Y%m%dT%H%M%SZ).dump.gpg"
+          out="$RUNNER_TEMP/backup/$name"
+          # Format custom (compressé, restaurable table par table avec pg_restore), schéma public uniquement.
+          # La phrase de passe passe par le descripteur 3 (jamais en argument de commande ni dans les logs).
+          "$PGBIN/pg_dump" --dbname="$url" --schema=public --format=custom --compress=9 \
+              --no-owner --quote-all-identifiers \
+            | gpg --batch --yes --no-tty --quiet --pinentry-mode loopback --passphrase-fd 3 \
+                --symmetric --cipher-algo AES256 --s2k-mode 3 --s2k-digest-algo SHA512 --s2k-count 65011712 \
+                --compress-algo none --output "$out" 3<<<"$BACKUP_PASSPHRASE"
+          echo "BACKUP_FILE=$out" >> "$GITHUB_ENV"
+          echo "BACKUP_NAME=${name%.dump.gpg}" >> "$GITHUB_ENV"
+          echo "Sauvegarde chiffrée : $name ($(du -h "$out" | cut -f1))"
+
+      - name: Vérifier la sauvegarde (déchiffrement en mémoire + lecture du sommaire)
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          # Le fichier doit être un message OpenPGP chiffré, pas un dump en clair
+          if head -c 5 "$BACKUP_FILE" | grep -q '^PGDMP'; then
+            echo "::error::Le fichier de sauvegarde n'est pas chiffré : envoi annulé."
+            rm -f "$BACKUP_FILE"
+            exit 1
+          fi
+          toc="$(gpg --batch --no-tty --quiet --pinentry-mode loopback --passphrase-fd 3 --decrypt "$BACKUP_FILE" 3<<<"$BACKUP_PASSPHRASE" \
+            | "$PGBIN/pg_restore" --list)"
+          if ! grep -Eq 'TABLE DATA public "?missions"?( |$)' <<<"$toc"; then
+            echo "::error::La sauvegarde ne contient pas les données de la table public.missions."
+            exit 1
+          fi
+          echo "Sauvegarde valide : $(grep -c '' <<<"$toc") entrées dans le sommaire."
+
+      - name: Envoyer l'artifact chiffré
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.BACKUP_NAME }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: ${{ env.RETENTION_DAYS }}
+          compression-level: 0 # déjà compressé et chiffré
+          if-no-files-found: error
+
+      - name: Nettoyage
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/backup"

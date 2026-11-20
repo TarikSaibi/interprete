@@ -1,18 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calculator, LogOut, Save } from 'lucide-react';
+import { Calculator, LogOut, Pencil, Save, X } from 'lucide-react';
 import {
   computeMissionCA, computePagesCA, MEAL_ALLOWANCE, TARIF_REGIMES, PAGE_TRANSLATION_RATE, PAGE_WORDS, MAX_PAGES,
 } from '@/lib/caCalculator';
 import { isSupabaseConfigured, signOutAndRedirect } from '@/lib/supabase';
-import { createMission, currentMonth } from '@/lib/missionsApi';
+import { createMission, currentMonth, listRecentClients, missionChangeKind, updateMission } from '@/lib/missionsApi';
 import { useSession } from '@/hooks/useSession';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { LoginForm } from '@/components/missions/LoginForm';
 import { MissionHistory } from '@/components/missions/MissionHistory';
 import { ModeSwitch } from '@/components/missions/ModeSwitch';
+import { ClientInput } from '@/components/missions/ClientInput';
+import { rankClients } from '@/lib/clientSuggestions';
 import { DateInputFr, DatePickerButton, TimeSelectFr, todayIso } from '@/components/missions/FrInputs';
-import { eur, isoToFr, plural } from '@/lib/format';
+import { eur, hhmm, isoToFr, meal, missionTotal, plural } from '@/lib/format';
 import { frError } from '@/lib/errors';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
@@ -23,6 +25,9 @@ const MODES = [
   { id: 'hourly', label: "Interprète (à l'heure)" },
   { id: 'pages', label: 'Traduction écrite (à la page)' },
 ];
+
+// Vue annuelle (recharts) chargée à la demande : n'alourdit pas le bundle de la vitrine
+const YearlyCA = lazy(() => import('@/components/missions/YearlyCA').then((m) => ({ default: m.YearlyCA })));
 
 const toIso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
@@ -39,7 +44,11 @@ export const CACalculator = () => {
   const [refreshToken, setRefreshToken] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState(null);
+  const [editing, setEditing] = useState(null); // mission en cours de modification
+  const [clientSuggestions, setClientSuggestions] = useState([]);
+  const formRef = useRef(null);
   const session = useSession();
+  const userId = session?.user?.id;
   const isAdmin = useIsAdmin(session);
   useDocumentTitle('Calculateur de CA');
 
@@ -48,23 +57,76 @@ export const CACalculator = () => {
     () => (isPagesMode ? computePagesCA({ pages }) : computeMissionCA({ date, startTime, endTime })),
     [isPagesMode, pages, date, startTime, endTime]
   );
-  // Le calcul à la page ne dépend pas de la date, mais l'enregistrement oui
-  const canSave = Boolean(result && date);
-
   const mealAmount = !isPagesMode && withMeal ? MEAL_ALLOWANCE : 0;
+  const formInput = { type: mode, date, startTime, endTime, pages, client, notes, mealAmount };
+  // Modification : 'meta' (client / notes seuls, montants conservés) ou 'recalc' (nouvelle saisie au barème courant)
+  const changeKind = editing ? missionChangeKind(editing, formInput) : null;
+  // Le calcul à la page ne dépend pas de la date, mais l'enregistrement oui
+  const canSave = editing
+    ? changeKind === 'meta' || (changeKind === 'recalc' && Boolean(result && date))
+    : Boolean(result && date);
+
+  // Suggestions de clients : clients déjà saisis par l'utilisateur
+  useEffect(() => {
+    if (!userId) return undefined;
+    let alive = true;
+    listRecentClients(userId)
+      .then((rows) => alive && setClientSuggestions(rankClients(rows)))
+      .catch(() => alive && setClientSuggestions([]));
+    return () => {
+      alive = false;
+    };
+  }, [userId, refreshToken]);
+
+  const resetForm = () => {
+    setEditing(null);
+    setClient('');
+    setNotes('');
+    setWithMeal(false);
+    setPages('');
+  };
+
+  const startEdit = (m) => {
+    const pagesType = m.mission_type === 'pages';
+    setEditing(m);
+    setMode(pagesType ? 'pages' : 'hourly');
+    setDate(m.mission_date);
+    setStartTime(pagesType ? '' : hhmm(m.start_time));
+    setEndTime(pagesType ? '' : hhmm(m.end_time));
+    setPages(pagesType ? String(m.pages_count ?? '') : '');
+    setClient(m.client || '');
+    setNotes(m.notes || '');
+    setWithMeal(meal(m) > 0);
+    setSaveMessage(null);
+    formRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  };
+
+  const cancelEdit = () => {
+    resetForm();
+    setSaveMessage(null);
+  };
   const sameTimes = !isPagesMode && date && startTime && endTime && startTime === endTime;
   const pagesInvalid = isPagesMode && pages !== '' && !result;
 
   const onSave = async () => {
+    if (editing && changeKind === 'recalc' && !window.confirm(
+      `Le CA de cette mission sera recalculé avec le barème actuel : ${eur(missionTotal(editing))} (enregistré) → ${eur(result.total + mealAmount)} (nouveau). Continuer ?`
+    )) return;
     setSaving(true);
     setSaveMessage(null);
     try {
-      await createMission({ type: mode, date, startTime, endTime, client, notes, mealAmount }, result);
-      setSaveMessage({ ok: true, text: 'Mission enregistrée.' });
-      setClient('');
-      setNotes('');
-      setWithMeal(false);
-      if (isPagesMode) setPages('');
+      if (editing) {
+        await updateMission(editing, formInput, result);
+        setSaveMessage({ ok: true, text: changeKind === 'recalc' ? 'Mission modifiée, CA recalculé.' : 'Mission modifiée, CA enregistré conservé.' });
+        resetForm();
+      } else {
+        await createMission(formInput, result);
+        setSaveMessage({ ok: true, text: 'Mission enregistrée.' });
+        setClient('');
+        setNotes('');
+        setWithMeal(false);
+        if (isPagesMode) setPages('');
+      }
       setMonth(date.slice(0, 7));
       setRefreshToken((n) => n + 1);
     } catch (e) {
@@ -136,7 +198,19 @@ export const CACalculator = () => {
         </div>
 
         {/* Formulaire */}
-        <section aria-label="Saisie de la mission" className="bg-slate-50 border border-slate-200 rounded-sm p-4 sm:p-6">
+        <section ref={formRef} aria-label="Saisie de la mission"
+          className={`scroll-mt-4 border rounded-sm p-4 sm:p-6 ${editing ? 'bg-amber-50/40 border-amber-300' : 'bg-slate-50 border-slate-200'}`}>
+          {editing && (
+            <div className="mb-4 pb-4 border-b border-amber-200 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-[#0A192F] inline-flex items-center gap-2">
+                <Pencil className="h-4 w-4" /> Modification de la mission du {isoToFr(editing.mission_date)}
+              </p>
+              <button type="button" onClick={cancelEdit}
+                className="inline-flex items-center gap-1.5 px-3 h-10 border border-slate-300 bg-white rounded-sm text-sm hover:bg-slate-50">
+                <X className="h-4 w-4" /> Annuler la modification
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
               <label htmlFor="mission-date" className="text-sm font-semibold text-[#0A192F]">
@@ -188,9 +262,9 @@ export const CACalculator = () => {
                 <label htmlFor="mission-client" className="text-sm font-semibold text-[#0A192F]">
                   Client / lieu (optionnel)
                 </label>
-                <input id="mission-client" type="text" value={client} maxLength={200}
+                <ClientInput id="mission-client" value={client} maxLength={200} suggestions={clientSuggestions}
                   placeholder={isPagesMode ? 'Ex. Tribunal judiciaire de Paris' : 'Ex. Commissariat Paris 18e'}
-                  onChange={(e) => setClient(e.target.value)} className={fieldClass} />
+                  onChange={setClient} className={fieldClass} />
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="mission-notes" className="text-sm font-semibold text-[#0A192F]">
@@ -218,13 +292,29 @@ export const CACalculator = () => {
               L'heure de fin doit être différente de l'heure de début.
             </p>
           )}
+          {editing && changeKind && (
+            <div role="status" data-testid="edit-notice"
+              className={`mt-4 text-sm rounded-sm border p-3 ${changeKind === 'recalc' ? 'border-amber-400 bg-amber-50 text-amber-900' : 'border-slate-200 bg-white text-slate-700'}`}>
+              {changeKind === 'none' && 'Aucune modification pour le moment.'}
+              {changeKind === 'meta' && (
+                <>Seuls le client et/ou les notes changent : le CA enregistré ({eur(missionTotal(editing))}) et son détail sont conservés tels quels.</>
+              )}
+              {changeKind === 'recalc' && (
+                <>
+                  <strong>Date, horaires, type, nombre de pages ou repas modifiés :</strong> la mission sera enregistrée comme
+                  une nouvelle saisie et son CA recalculé avec le barème actuel
+                  {result ? <> : {eur(missionTotal(editing))} (enregistré) → <strong>{eur(result.total + mealAmount)}</strong> (nouveau).</> : '.'}
+                </>
+              )}
+            </div>
+          )}
           {session && (
             <div className="mt-5 pt-5 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center gap-3">
               <button type="button" onClick={onSave} disabled={saving || !canSave}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#1E3A8A] hover:bg-[#0A192F] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-sm transition-colors">
-                <Save className="h-4 w-4" /> {saving ? 'Enregistrement…' : 'Ajouter la mission'}
+                <Save className="h-4 w-4" /> {saving ? 'Enregistrement…' : editing ? 'Enregistrer les modifications' : 'Ajouter la mission'}
               </button>
-              {!canSave && !saveMessage && <span className="text-sm text-slate-500">{missingHint}</span>}
+              {!canSave && !saveMessage && (!editing || changeKind === 'recalc') && <span className="text-sm text-slate-500">{missingHint}</span>}
               {saveMessage && (
                 <span role={saveMessage.ok ? 'status' : 'alert'} className={`text-sm ${saveMessage.ok ? 'text-emerald-700' : 'text-red-600'}`}>
                   {saveMessage.text}
@@ -309,7 +399,14 @@ export const CACalculator = () => {
         {/* Historique (Supabase) */}
         {isSupabaseConfigured && session === null && <LoginForm />}
         {session && (
-          <MissionHistory month={month} onMonthChange={setMonth} refreshToken={refreshToken} />
+          <>
+            <MissionHistory month={month} onMonthChange={setMonth} refreshToken={refreshToken}
+              onEdit={startEdit} editingId={editing?.id}
+              onDeleted={(m) => editing?.id === m.id && cancelEdit()} />
+            <Suspense fallback={<p role="status" className="text-sm text-slate-500">Chargement du CA annuel…</p>}>
+              <YearlyCA userId={userId} refreshToken={refreshToken} />
+            </Suspense>
+          </>
         )}
 
         {/* Barème de référence */}

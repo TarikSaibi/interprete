@@ -1,4 +1,4 @@
-*66# Interprète judiciaire — site vitrine + outil de suivi des missions
+# Interprète judiciaire — site vitrine + outil de suivi des missions
 
 Site vitrine (kenzaalim-interprete.fr) + pages privées de suivi du CA des missions d'interprétariat.
 Dépôt **public** sur GitHub.

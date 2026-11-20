@@ -1,4 +1,4 @@
-66666---
+---
 name: dev-devops
 description: Développeur web full-stack + DevOps du site. À utiliser pour implémenter des fonctionnalités (React/Tailwind), corriger des bugs, écrire des migrations Supabase, modifier les Edge Functions ou les workflows GitHub Actions (déploiement GitHub Pages, keepalive Supabase).
 model: inherit

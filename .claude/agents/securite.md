@@ -1,4 +1,4 @@
-6---
+---
 name: securite
 description: Auditeur sécurité (lecture seule). À utiliser pour auditer le code, les migrations SQL/RLS Supabase, l'Edge Function d'invitation, les workflows CI et les dépendances, avant une mise en prod ou après une modification sensible (auth, données, droits admin).
 tools: Read, Grep, Glob, Bash

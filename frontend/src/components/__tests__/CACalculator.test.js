@@ -24,6 +24,14 @@ jest.mock('@/lib/missionsApi', () => ({
   listMissionsForMonth: jest.fn(),
   fetchIsAdmin: jest.fn(),
   deleteMission: jest.fn(),
+  updateMission: jest.fn(),
+  listRecentClients: jest.fn(),
+  listMissionsForYears: jest.fn(),
+}));
+
+// Vue annuelle testée à part (YearlyCA.test.js) : simple marqueur ici
+jest.mock('@/components/missions/YearlyCA', () => ({
+  YearlyCA: ({ userId }) => require('react').createElement('div', { 'data-testid': 'yearly-ca' }, `CA annuel ${userId}`),
 }));
 
 jest.mock('react-router-dom', () => {
@@ -47,6 +55,9 @@ beforeEach(() => {
   api.createMission.mockResolvedValue({ id: 1 });
   api.listMissionsForMonth.mockResolvedValue([]);
   api.fetchIsAdmin.mockResolvedValue(false);
+  api.updateMission.mockResolvedValue({ id: 1 });
+  api.listRecentClients.mockResolvedValue([]);
+  api.listMissionsForYears.mockResolvedValue([]);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -284,5 +295,115 @@ describe('enregistrement', () => {
     await flush();
     const months = api.listMissionsForMonth.mock.calls.map((c) => c[0]);
     expect(months[months.length - 1]).toBe('2026-12');
+  });
+});
+
+describe('modification d\'une mission', () => {
+  // Montants enregistrés avec un ancien barème fictif : ne doivent pas bouger si seuls client / notes changent
+  const SAVED = {
+    id: 'm1', mission_date: '2026-11-13', mission_type: 'hourly', start_time: '21:00:00', end_time: '01:00:00',
+    hours_count: 4, pages_count: null, amount: '200.00', meal_amount: '15.00', client: 'Tribunal X', notes: null,
+    breakdown: [{ label: '1ère heure', clockLabel: 'ven. 21:00', regimeLabel: 'ancien', rate: 200 }],
+  };
+  let confirmSpy;
+  beforeEach(() => {
+    api.listMissionsForMonth.mockResolvedValue([SAVED]);
+    confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+  });
+  afterEach(() => confirmSpy.mockRestore());
+
+  const notice = () => $('[data-testid="edit-notice"]');
+  const editBtn = () => buttonByText('Enregistrer les modifications');
+  async function startEdit() {
+    await renderCalc({ loggedIn: true });
+    act(() => byLabel('Modifier la mission du 13/11/2026').click());
+  }
+
+  test('Modifier : formulaire prérempli, aucune modification -> enregistrement désactivé', async () => {
+    await startEdit();
+    expect(text()).toContain('Modification de la mission du 13/11/2026');
+    expect($('#mission-date').value).toBe('13/11/2026');
+    expect($('#mission-client').value).toBe('Tribunal X');
+    expect(mealBox().checked).toBe(true);
+    expect(notice().textContent).toContain('Aucune modification');
+    expect(editBtn().disabled).toBe(true);
+    expect(saveBtn()).toBeUndefined();
+  });
+
+  test('client seul : CA enregistré conservé (annoncé), updateMission sans confirmation', async () => {
+    await startEdit();
+    type($('#mission-client'), 'Commissariat Y');
+    expect(notice().textContent.replace(/[  ]/g, ' ')).toContain('le CA enregistré (215,00 €) et son détail sont conservés');
+    await act(async () => editBtn().click());
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(api.updateMission).toHaveBeenCalledTimes(1);
+    const [orig, input] = api.updateMission.mock.calls[0];
+    expect(orig).toBe(SAVED);
+    expect(input).toMatchObject({ client: 'Commissariat Y', date: '2026-11-13', startTime: '21:00', endTime: '01:00', mealAmount: 20 });
+    expect(text()).toContain('Mission modifiée, CA enregistré conservé.');
+    expect(saveBtn()).not.toBeUndefined(); // retour au mode ajout
+  });
+
+  test('horaires modifiés : recalcul annoncé avant enregistrement + confirmation', async () => {
+    await startEdit();
+    type(byLabel('Heure de début — heures'), '22');
+    const n = notice().textContent.replace(/[  ]/g, ' ');
+    expect(n).toContain('nouvelle saisie');
+    expect(n).toContain('barème actuel');
+    expect(n).toContain('215,00 € (enregistré) → ');
+    confirmSpy.mockReturnValue(false);
+    await act(async () => editBtn().click());
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(api.updateMission).not.toHaveBeenCalled();
+    confirmSpy.mockReturnValue(true);
+    await act(async () => editBtn().click());
+    const [, input, result] = api.updateMission.mock.calls[0];
+    expect(input).toMatchObject({ startTime: '22:00', endTime: '01:00' });
+    expect(result.hoursCount).toBe(3);
+    expect(text()).toContain('Mission modifiée, CA recalculé.');
+  });
+
+  test('Annuler la modification : formulaire vidé, retour au mode ajout', async () => {
+    await startEdit();
+    act(() => buttonByText('Annuler la modification').click());
+    expect($('#mission-client').value).toBe('');
+    expect(notice()).toBeNull();
+    expect(saveBtn()).not.toBeUndefined();
+  });
+
+  test('échec : message en français, mode modification conservé', async () => {
+    api.updateMission.mockRejectedValue(new Error('Failed to fetch'));
+    await startEdit();
+    type($('#mission-notes'), 'PV 1');
+    await act(async () => editBtn().click());
+    expect(text()).toContain('Enregistrement impossible : Connexion au serveur impossible');
+    expect(editBtn()).not.toBeUndefined();
+  });
+});
+
+describe('suggestions de clients et vue annuelle', () => {
+  test('clients déjà saisis proposés dans le champ client', async () => {
+    api.listRecentClients.mockResolvedValue([
+      { client: 'Commissariat Paris 18e', mission_date: '2026-11-01' },
+      { client: 'Tribunal X', mission_date: '2026-10-01' },
+      { client: 'Tribunal X', mission_date: '2026-09-01' },
+    ]);
+    await renderCalc({ loggedIn: true });
+    expect(api.listRecentClients).toHaveBeenCalledWith('u-test');
+    act(() => $('#mission-client').dispatchEvent(new FocusEvent('focusin', { bubbles: true })));
+    const opts = [...container.querySelectorAll('[role="option"]')].map((o) => o.textContent);
+    expect(opts).toEqual(['Tribunal X', 'Commissariat Paris 18e']);
+  });
+
+  test('vue annuelle affichée une fois connecté', async () => {
+    await renderCalc({ loggedIn: true });
+    await flush();
+    expect($('[data-testid="yearly-ca"]').textContent).toBe('CA annuel u-test');
+  });
+
+  test('non connecté : pas de suggestions ni de vue annuelle', async () => {
+    await renderCalc();
+    expect(api.listRecentClients).not.toHaveBeenCalled();
+    expect($('[data-testid="yearly-ca"]')).toBeNull();
   });
 });

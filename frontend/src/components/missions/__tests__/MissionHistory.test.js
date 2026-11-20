@@ -172,3 +172,39 @@ test('navigation : mois précédent / suivant', async () => {
   act(() => container.querySelector('[aria-label="Mois suivant"]').click());
   expect(months).toEqual(['2026-10', '2026-12']);
 });
+
+describe('modification', () => {
+  test('sans onEdit : aucun bouton Modifier', async () => {
+    await renderHistory();
+    expect(container.querySelector('[aria-label^="Modifier la mission"]')).toBeNull();
+    expect(text(mobile())).not.toContain('Modifier');
+  });
+
+  test('tableau : bouton Modifier (≥ 40 px) par ligne -> onEdit(mission)', async () => {
+    const onEdit = jest.fn();
+    await renderHistory({ onEdit });
+    const btn = container.querySelector('[aria-label="Modifier la mission du 13/11/2026"]');
+    expect(btn.className).toContain('h-10 w-10');
+    act(() => btn.click());
+    expect(onEdit).toHaveBeenCalledWith(HOURLY);
+  });
+
+  test('carte mobile dépliée : bouton Modifier -> onEdit(mission)', async () => {
+    const onEdit = jest.fn();
+    await renderHistory({ onEdit });
+    const card = mobile().querySelector('article');
+    act(() => card.querySelector('button').click()); // déplie
+    const btn = [...card.querySelectorAll('button')].find((b) => b.textContent.includes('Modifier'));
+    expect(btn.className).toContain('h-11');
+    act(() => btn.click());
+    expect(onEdit).toHaveBeenCalledWith(HOURLY);
+  });
+
+  test('ligne en cours de modification surlignée ; suppression -> onDeleted', async () => {
+    const onDeleted = jest.fn();
+    await renderHistory({ onEdit: () => {}, editingId: 'p1', onDeleted });
+    expect(table().querySelectorAll('tbody tr')[1].className).toContain('bg-amber-50');
+    await act(async () => container.querySelector('[aria-label="Supprimer la mission du 20/11/2026"]').click());
+    expect(onDeleted).toHaveBeenCalledWith(PAGES);
+  });
+});

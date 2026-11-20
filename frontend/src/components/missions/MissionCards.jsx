@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, Trash2 } from 'lucide-react';
+import { ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import { eur, hhmm, formatDate, meal, missionTotal, isPages, missionQty, plural } from '@/lib/format';
 
 // Libellé court du type de mission
@@ -33,7 +33,7 @@ export const MissionBreakdown = ({ mission }) => (
 );
 
 // Ligne mission pour mobile (remplace la ligne de tableau sous md). À placer dans une liste avec divide-y.
-export const MissionCard = ({ mission: m, showUser, expanded, onToggle, onDelete }) => (
+export const MissionCard = ({ mission: m, showUser, expanded, onToggle, onEdit, onDelete }) => (
   <article className="bg-white">
     <button type="button" onClick={onToggle} aria-expanded={expanded}
       className="w-full text-left p-3 flex items-start gap-3 active:bg-slate-50">
@@ -67,11 +67,21 @@ export const MissionCard = ({ mission: m, showUser, expanded, onToggle, onDelete
             <MissionBreakdown mission={m} />
           </div>
         </div>
-        {onDelete && (
-          <button type="button" onClick={onDelete}
-            className="w-full inline-flex items-center justify-center gap-2 h-11 border border-red-200 text-red-600 rounded-sm text-sm hover:bg-red-50">
-            <Trash2 className="h-4 w-4" /> Supprimer la mission
-          </button>
+        {(onEdit || onDelete) && (
+          <div className={`grid gap-2 ${onEdit && onDelete ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            {onEdit && (
+              <button type="button" onClick={onEdit}
+                className="w-full inline-flex items-center justify-center gap-2 h-11 border border-slate-300 text-[#0A192F] rounded-sm text-sm hover:bg-slate-50">
+                <Pencil className="h-4 w-4" /> Modifier
+              </button>
+            )}
+            {onDelete && (
+              <button type="button" onClick={onDelete}
+                className="w-full inline-flex items-center justify-center gap-2 h-11 border border-red-200 text-red-600 rounded-sm text-sm hover:bg-red-50">
+                <Trash2 className="h-4 w-4" /> {onEdit ? 'Supprimer' : 'Supprimer la mission'}
+              </button>
+            )}
+          </div>
         )}
       </div>
     )}

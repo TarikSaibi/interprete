@@ -1,5 +1,5 @@
 import React, { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown, Download, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Download, Pencil, Trash2 } from 'lucide-react';
 import { listMissionsForMonth, deleteMission, shiftMonth } from '@/lib/missionsApi';
 import {
   eur, hhmm, formatDate, isoToFr, monthLabel, meal, missionTotal, csvNum, downloadCsv, isPages, missionQty, plural,
@@ -22,7 +22,7 @@ function exportCsv(month, missions) {
   ]);
 }
 
-export const MissionHistory = ({ month, onMonthChange, refreshToken }) => {
+export const MissionHistory = ({ month, onMonthChange, refreshToken, onEdit, editingId, onDeleted }) => {
   const [missions, setMissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -52,6 +52,7 @@ export const MissionHistory = ({ month, onMonthChange, refreshToken }) => {
     try {
       await deleteMission(m.id);
       setMissions((list) => list.filter((x) => x.id !== m.id));
+      onDeleted?.(m);
     } catch (e) {
       setError(`Suppression impossible : ${frError(e)}`);
     }
@@ -115,7 +116,7 @@ export const MissionHistory = ({ month, onMonthChange, refreshToken }) => {
         {!loading && !missions.length && <p className="py-6 text-center text-slate-500">Aucune mission ce mois-ci.</p>}
         {!loading && missions.map((m) => (
           <MissionCard key={m.id} mission={m} expanded={expanded === m.id}
-            onToggle={() => toggle(m.id)} onDelete={() => onDelete(m)} />
+            onToggle={() => toggle(m.id)} onEdit={onEdit ? () => onEdit(m) : undefined} onDelete={() => onDelete(m)} />
         ))}
         {!loading && missions.length > 0 && (
           <MobileTotal label={monthLabel(month)} hours={totals.hours} pages={totals.pages} amount={totals.amount} meals={totals.meals} subtotals={totals} />
@@ -135,7 +136,7 @@ export const MissionHistory = ({ month, onMonthChange, refreshToken }) => {
               <th className="text-right px-3 py-2 font-semibold text-[#0A192F]">Prestations</th>
               <th className="text-right px-3 py-2 font-semibold text-[#0A192F]">Repas</th>
               <th className="text-right px-3 py-2 font-semibold text-[#0A192F]">CA</th>
-              <th className="w-10" />
+              <th className={onEdit ? 'w-20' : 'w-10'} />
             </tr>
           </thead>
           <tbody>
@@ -147,7 +148,7 @@ export const MissionHistory = ({ month, onMonthChange, refreshToken }) => {
             )}
             {!loading && missions.map((m) => (
               <Fragment key={m.id}>
-                <tr className="border-t border-slate-200">
+                <tr className={`border-t border-slate-200 ${editingId === m.id ? 'bg-amber-50' : ''}`}>
                   <td className="pl-2">
                     <button type="button" aria-label="Détail heure par heure" aria-expanded={expanded === m.id} onClick={() => toggle(m.id)}
                       className="h-9 w-9 inline-flex items-center justify-center text-slate-500 hover:text-[#0A192F]">
@@ -161,9 +162,13 @@ export const MissionHistory = ({ month, onMonthChange, refreshToken }) => {
                   <td className="px-3 py-2 text-right whitespace-nowrap">{eur(m.amount)}</td>
                   <td className="px-3 py-2 text-right whitespace-nowrap text-slate-600">{meal(m) ? eur(meal(m)) : '—'}</td>
                   <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{eur(missionTotal(m))}</td>
-                  <td className="pr-2 text-right">
+                  <td className="pr-2 text-right whitespace-nowrap">
+                    {onEdit && (
+                      <button type="button" aria-label={`Modifier la mission du ${isoToFr(m.mission_date)}`} title="Modifier" onClick={() => onEdit(m)}
+                        className="h-10 w-10 inline-flex items-center justify-center text-slate-500 hover:text-[#1E3A8A]"><Pencil className="h-4 w-4" /></button>
+                    )}
                     <button type="button" aria-label={`Supprimer la mission du ${isoToFr(m.mission_date)}`} title="Supprimer" onClick={() => onDelete(m)}
-                      className="h-9 w-9 inline-flex items-center justify-center text-slate-500 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
+                      className="h-10 w-10 inline-flex items-center justify-center text-slate-500 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                   </td>
                 </tr>
                 {expanded === m.id && (

@@ -4,16 +4,17 @@ process.env.TZ = 'Europe/Paris';
 
 const mockCalls = [];
 const mockResult = { current: { data: null, error: null } };
+const mockQueue = []; // réponses successives (pagination), sinon mockResult.current
 
 function mockBuilder() {
   const b = {};
-  ['from', 'select', 'insert', 'delete', 'eq', 'gte', 'lt', 'order', 'single'].forEach((m) => {
+  ['from', 'select', 'insert', 'update', 'delete', 'eq', 'gte', 'lt', 'order', 'single', 'range', 'not', 'limit'].forEach((m) => {
     b[m] = (...args) => {
       mockCalls.push([m, ...args]);
       return b;
     };
   });
-  b.then = (resolve, reject) => Promise.resolve(mockResult.current).then(resolve, reject);
+  b.then = (resolve, reject) => Promise.resolve(mockQueue.length ? mockQueue.shift() : mockResult.current).then(resolve, reject);
   return b;
 }
 
@@ -34,10 +35,11 @@ const mockSupabase = {
 jest.mock('@/lib/supabase', () => ({ supabase: mockSupabase }));
 
 const api = require('../missionsApi');
-const { computeMissionCA, MEAL_ALLOWANCE } = require('../caCalculator');
+const { computeMissionCA, computePagesCA, MEAL_ALLOWANCE } = require('../caCalculator');
 
 beforeEach(() => {
   mockCalls.length = 0;
+  mockQueue.length = 0;
   mockResult.current = { data: null, error: null };
 });
 
@@ -163,5 +165,129 @@ describe('admin', () => {
     const error = Object.assign(new Error('generic'), { context: { json: async () => { throw new SyntaxError(); } } });
     mockResult.current = { data: null, error };
     await expect(api.inviteUser('personne@example.test')).rejects.toThrow('generic');
+  });
+});
+
+// ---- Modification d'une mission ----
+const ORIGINAL = {
+  id: 'm1', mission_date: '2026-11-13', mission_type: 'hourly', start_time: '21:00:00', end_time: '01:00:00',
+  hours_count: 4, pages_count: null, amount: '200.00', meal_amount: '15.00', client: 'Tribunal X', notes: null,
+  breakdown: [{ label: 'ancien', clockLabel: 'x', regimeLabel: 'ancien barème', rate: 200 }],
+};
+const sameInput = {
+  type: 'hourly', date: '2026-11-13', startTime: '21:00', endTime: '01:00', pages: '', mealAmount: 20, client: 'Tribunal X', notes: '',
+};
+
+describe('missionChangeKind', () => {
+  test('rien ne change -> none (repas : présence comparée, pas le montant)', () => {
+    expect(api.missionChangeKind(ORIGINAL, sameInput)).toBe('none');
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, client: '  Tribunal X ' })).toBe('none');
+  });
+  test('client ou notes seuls -> meta', () => {
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, client: 'Commissariat Y' })).toBe('meta');
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, notes: 'PV 123' })).toBe('meta');
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, client: '' })).toBe('meta');
+  });
+  test('date, horaires, repas ou type -> recalc', () => {
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, date: '2026-11-14' })).toBe('recalc');
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, startTime: '20:00' })).toBe('recalc');
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, endTime: '02:00' })).toBe('recalc');
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, mealAmount: 0 })).toBe('recalc');
+    expect(api.missionChangeKind(ORIGINAL, { ...sameInput, type: 'pages', pages: '3' })).toBe('recalc');
+  });
+  test('mission à la page : nombre de pages -> recalc ; ancienne ligne sans type = horaire', () => {
+    const p = { ...ORIGINAL, mission_type: 'pages', start_time: null, end_time: null, hours_count: null, pages_count: 3, meal_amount: '0' };
+    const pin = { type: 'pages', date: p.mission_date, pages: '3', mealAmount: 0, client: 'Tribunal X', notes: '' };
+    expect(api.missionChangeKind(p, pin)).toBe('none');
+    expect(api.missionChangeKind(p, { ...pin, pages: '4' })).toBe('recalc');
+    const legacy = { ...ORIGINAL, mission_type: undefined };
+    expect(api.missionChangeKind(legacy, sameInput)).toBe('none');
+  });
+});
+
+describe('updateMission : montants figés', () => {
+  test('client / notes seuls : n\'envoie QUE client et notes (amount / breakdown / meal_amount intacts)', async () => {
+    mockResult.current = { data: { id: 'm1' }, error: null };
+    await api.updateMission(ORIGINAL, { ...sameInput, client: ' Commissariat Y ', notes: 'PV' }, computeMissionCA(sameInput));
+    const patch = mockCalls.find((c) => c[0] === 'update')[1];
+    expect(patch).toEqual({ client: 'Commissariat Y', notes: 'PV' });
+    expect(mockCalls.map((c) => c[0])).toEqual(['from', 'update', 'eq', 'select', 'single']);
+    expect(mockCalls.find((c) => c[0] === 'eq')).toEqual(['eq', 'id', 'm1']);
+  });
+
+  test('aucune modification : pas d\'appel réseau', async () => {
+    await expect(api.updateMission(ORIGINAL, sameInput, null)).resolves.toBe(ORIGINAL);
+    expect(mockCalls).toEqual([]);
+  });
+
+  test('horaires modifiés : ligne complète recalculée au barème courant', async () => {
+    const input = { ...sameInput, startTime: '09:00', endTime: '10:00', date: '2026-11-10' };
+    const result = computeMissionCA(input);
+    await api.updateMission(ORIGINAL, input, result);
+    const patch = mockCalls.find((c) => c[0] === 'update')[1];
+    expect(patch).toMatchObject({
+      mission_type: 'hourly', mission_date: '2026-11-10', start_time: '09:00', end_time: '10:00',
+      hours_count: 1, pages_count: null, amount: 65, meal_amount: 20, client: 'Tribunal X', notes: null,
+    });
+    expect(patch.breakdown).toEqual([{ label: '1ère heure', clockLabel: result.breakdown[0].clockLabel, regimeLabel: 'Lundi au vendredi, de 7h à 22h', rate: 65 }]);
+  });
+
+  test('passage en traduction écrite : horaires et repas remis à zéro', async () => {
+    const input = { ...sameInput, type: 'pages', pages: '2' };
+    await api.updateMission(ORIGINAL, input, computePagesCA({ pages: 2 }));
+    const patch = mockCalls.find((c) => c[0] === 'update')[1];
+    expect(patch).toMatchObject({
+      mission_type: 'pages', pages_count: 2, start_time: null, end_time: null, hours_count: null, meal_amount: 0, amount: 77,
+    });
+  });
+
+  test('recalcul sans résultat : erreur, aucun appel', async () => {
+    await expect(api.updateMission(ORIGINAL, { ...sameInput, startTime: '09:00' }, null)).rejects.toThrow('Calcul du CA');
+    expect(mockCalls).toEqual([]);
+  });
+
+  test('propage l\'erreur Supabase', async () => {
+    mockResult.current = { data: null, error: new Error('RLS') };
+    await expect(api.updateMission(ORIGINAL, { ...sameInput, notes: 'x' })).rejects.toThrow('RLS');
+  });
+});
+
+describe('vue annuelle / suggestions', () => {
+  test('listMissionsForYears : filtre user_id + bornes, colonnes utiles', async () => {
+    mockResult.current = { data: [{ id: 1 }], error: null };
+    await expect(api.listMissionsForYears('u1', 2025, 2026)).resolves.toEqual([{ id: 1 }]);
+    expect(mockCalls).toEqual([
+      ['from', 'missions'],
+      ['select', 'id, mission_date, mission_type, amount, meal_amount'],
+      ['eq', 'user_id', 'u1'],
+      ['gte', 'mission_date', '2025-01-01'],
+      ['lt', 'mission_date', '2027-01-01'],
+      ['order', 'mission_date', { ascending: true }],
+      ['order', 'id', { ascending: true }],
+      ['range', 0, 999],
+    ]);
+  });
+  test('listMissionsForYears : pagine au-delà de 1000 lignes', async () => {
+    const page = (n, start) => Array.from({ length: n }, (_, i) => ({ id: start + i }));
+    mockQueue.push({ data: page(1000, 0), error: null }, { data: page(5, 1000), error: null });
+    const rows = await api.listMissionsForYears('u1', 2025, 2026);
+    expect(rows).toHaveLength(1005);
+    expect(mockCalls.filter((c) => c[0] === 'range')).toEqual([['range', 0, 999], ['range', 1000, 1999]]);
+  });
+  test('listMissionsForYears propage l\'erreur', async () => {
+    mockResult.current = { data: null, error: new Error('boom') };
+    await expect(api.listMissionsForYears('u1', 2025, 2026)).rejects.toThrow('boom');
+  });
+  test('listRecentClients : clients non nuls de l\'utilisateur, plus récents d\'abord', async () => {
+    mockResult.current = { data: [{ client: 'A', mission_date: '2026-11-01' }], error: null };
+    await expect(api.listRecentClients('u1')).resolves.toEqual([{ client: 'A', mission_date: '2026-11-01' }]);
+    expect(mockCalls).toEqual([
+      ['from', 'missions'],
+      ['select', 'client, mission_date'],
+      ['eq', 'user_id', 'u1'],
+      ['not', 'client', 'is', null],
+      ['order', 'mission_date', { ascending: false }],
+      ['limit', 500],
+    ]);
   });
 });
