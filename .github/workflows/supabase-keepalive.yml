@@ -18,8 +18,29 @@ jobs:
           SUPABASE_URL: ${{ secrets.REACT_APP_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.REACT_APP_SUPABASE_ANON_KEY }}
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' \
-            "$SUPABASE_URL/rest/v1/missions?select=id&limit=1" \
-            -H "apikey: $SUPABASE_KEY")
+          # Nettoie les secrets : espaces, retours à la ligne et guillemets collés par erreur
+          # rendent l'URL invalide (curl sort alors avec le code 3, « URL mal formée »).
+          url="$(printf '%s' "$SUPABASE_URL" | tr -d '[:space:]"'"'")"
+          key="$(printf '%s' "$SUPABASE_KEY" | tr -d '[:space:]"'"'")"
+          # Valeur collée avec son nom (« REACT_APP_SUPABASE_URL=https://… ») : on garde la partie après « = ».
+          case "$url" in *=https://*) url="https://${url#*=https://}" ;; esac
+          case "$key" in REACT_APP_*=*) key="${key#*=}" ;; esac
+          url="${url%/}"
+          if [ -z "$url" ] || [ -z "$key" ]; then
+            echo "::error::Secret REACT_APP_SUPABASE_URL ou REACT_APP_SUPABASE_ANON_KEY absent ou vide (Settings > Secrets and variables > Actions > Repository secrets)."
+            exit 1
+          fi
+          case "$url" in
+            https://*) ;;
+            *) echo "::error::REACT_APP_SUPABASE_URL doit commencer par https:// (ex. https://xxxx.supabase.co)."; exit 1 ;;
+          esac
+          # Pas d'arrêt immédiat sur une erreur curl : on veut afficher un message clair.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+            --retry 3 --retry-delay 10 --retry-all-errors \
+            "$url/rest/v1/missions?select=id&limit=1" \
+            -H "apikey: $key") || true
           echo "HTTP $code"
-          test "$code" = "200"
+          if [ "$code" != "200" ]; then
+            echo "::error::Supabase a répondu HTTP $code (000 = injoignable, 401 = clé invalide, 404 = table absente, 540/503 = projet en pause)."
+            exit 1
+          fi
